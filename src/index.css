@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-steel-50 text-steel-900 antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl border border-steel-200 shadow-sm;
+  }
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-md hover:border-gold-200;
+  }
+  .btn-primary {
+    @apply px-4 py-2 text-sm font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply px-4 py-2 text-sm font-medium text-navy-700 bg-white border border-steel-300 rounded-lg hover:bg-steel-50 transition-colors disabled:opacity-50;
+  }
+  .btn-gold {
+    @apply px-4 py-2 text-sm font-medium text-navy-900 bg-gold-400 rounded-lg hover:bg-gold-500 transition-colors disabled:opacity-50;
+  }
+}
+
+@keyframes flash-red {
+  0%, 100% { color: #dc2626; }
+  50% { color: #fca5a5; }
+}
+
+.animate-flash-red {
+  animation: flash-red 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-flash-red {
+    animation: none;
+    color: #dc2626;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}

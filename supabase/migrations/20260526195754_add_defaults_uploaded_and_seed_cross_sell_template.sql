@@ -1,0 +1,178 @@
+/*
+  # Add defaults_uploaded flag and seed Cross-Sell Defaults Template
+
+  1. Modified Tables
+    - `crm_templates`
+      - Added `defaults_uploaded` (boolean, nullable) - tracks one-time upload completion
+
+  2. Seed Data
+    - Inserts "Cross-Sell Defaults Template" into crm_templates
+    - Pre-filled with 140 sample rows (5 products x 28 fields)
+    - Headers: Product Number, Product Name, Field Key, Field Value
+
+  3. Notes
+    - The defaults_uploaded flag is only used by the cross-sell template
+    - Once set to true, the upload button is permanently disabled
+*/
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'crm_templates' AND column_name = 'defaults_uploaded'
+  ) THEN
+    ALTER TABLE crm_templates ADD COLUMN defaults_uploaded boolean;
+  END IF;
+END $$;
+
+INSERT INTO crm_templates (name, description, file_name, headers, sample_rows, defaults_uploaded)
+VALUES (
+  'Cross-Sell Defaults Template',
+  'Upload default cross-sell product content across all 5 products (140 rows). One-time upload that applies to all current and future agencies.',
+  'cross_sell_defaults_template.csv',
+  '["Product Number", "Product Name", "Field Key", "Field Value"]',
+  '[
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"headline","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"meta_title","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"meta_description","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"meta_image_url","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"cta_text","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"button_cta_text","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_1","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_1_description","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_2","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_2_description","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_3","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_3_description","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_4","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_4_description","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_5","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"bullet_5_description","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"specialist_full_name","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"specialist_title","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"specialist_email","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"specialist_mobile","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"funnel_link_step_1","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"funnel_link_step_2","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"calendar_embed_code","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"appointment_disclaimer","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"confirmation_headline","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"confirmation_subheadline","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"confirmation_next_steps","Field Value":""},
+    {"Product Number":"1","Product Name":"Final Expense Life Insurance","Field Key":"system_crm_number","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"headline","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"meta_title","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"meta_description","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"meta_image_url","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"cta_text","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"button_cta_text","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_1","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_1_description","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_2","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_2_description","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_3","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_3_description","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_4","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_4_description","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_5","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"bullet_5_description","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"specialist_full_name","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"specialist_title","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"specialist_email","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"specialist_mobile","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"funnel_link_step_1","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"funnel_link_step_2","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"calendar_embed_code","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"appointment_disclaimer","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"confirmation_headline","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"confirmation_subheadline","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"confirmation_next_steps","Field Value":""},
+    {"Product Number":"2","Product Name":"Hospital Indemnity","Field Key":"system_crm_number","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"headline","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"meta_title","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"meta_description","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"meta_image_url","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"cta_text","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"button_cta_text","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_1","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_1_description","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_2","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_2_description","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_3","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_3_description","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_4","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_4_description","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_5","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"bullet_5_description","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"specialist_full_name","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"specialist_title","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"specialist_email","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"specialist_mobile","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"funnel_link_step_1","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"funnel_link_step_2","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"calendar_embed_code","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"appointment_disclaimer","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"confirmation_headline","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"confirmation_subheadline","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"confirmation_next_steps","Field Value":""},
+    {"Product Number":"3","Product Name":"Cancer/Stroke Coverage","Field Key":"system_crm_number","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"headline","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"meta_title","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"meta_description","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"meta_image_url","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"cta_text","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"button_cta_text","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_1","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_1_description","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_2","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_2_description","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_3","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_3_description","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_4","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_4_description","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_5","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"bullet_5_description","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"specialist_full_name","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"specialist_title","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"specialist_email","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"specialist_mobile","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"funnel_link_step_1","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"funnel_link_step_2","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"calendar_embed_code","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"appointment_disclaimer","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"confirmation_headline","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"confirmation_subheadline","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"confirmation_next_steps","Field Value":""},
+    {"Product Number":"4","Product Name":"LTC/STC","Field Key":"system_crm_number","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"headline","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"meta_title","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"meta_description","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"meta_image_url","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"cta_text","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"button_cta_text","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_1","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_1_description","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_2","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_2_description","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_3","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_3_description","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_4","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_4_description","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_5","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"bullet_5_description","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"specialist_full_name","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"specialist_title","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"specialist_email","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"specialist_mobile","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"funnel_link_step_1","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"funnel_link_step_2","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"calendar_embed_code","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"appointment_disclaimer","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"confirmation_headline","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"confirmation_subheadline","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"confirmation_next_steps","Field Value":""},
+    {"Product Number":"5","Product Name":"SmartSaveMeds","Field Key":"system_crm_number","Field Value":""}
+  ]'::jsonb,
+  false
+)
+ON CONFLICT (name) DO NOTHING;
