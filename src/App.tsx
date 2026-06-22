@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { LoginModal } from './components/LoginModal';
 import { Dashboard } from './pages/Dashboard';
 import { AgentIntake } from './pages/AgentIntake';
+import { AgencyIntake } from './pages/AgencyIntake';
 import { AgentTracking } from './pages/AgentTracking';
 import { AgentDatabase } from './pages/AgentDatabase';
 import { CrmTeam } from './pages/CrmTeam';
@@ -19,7 +20,7 @@ import { supabase } from './lib/supabase';
 import { AlertCircle } from 'lucide-react';
 
 const KNOWN_PATHS = new Set([
-  '', 'dashboard', 'agent-intake', 'new-hires', 'populate-form', 'populate',
+  '', 'dashboard', 'agent-intake', 'agency-intake', 'new-hires', 'populate-form', 'populate',
   'agent-tracking', 'agent-database', 'crm-team', 'crm',
 ]);
 
@@ -120,6 +121,7 @@ const ProtectedApp: React.FC = () => {
         <Route index element={<Dashboard />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="agent-intake" element={<AgentIntake />} />
+        <Route path="agency-intake" element={<AgencyIntake />} />
         <Route path="new-hires" element={<AgentIntake />} />
         <Route path="populate-form" element={<AgentIntake />} />
         <Route path="populate" element={<AgentIntake />} />

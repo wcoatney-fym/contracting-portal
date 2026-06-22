@@ -290,7 +290,7 @@ export type CrmTicketMessage = {
 export const RESERVED_SLUGS = new Set([
   'life', 'field', 'direct-pay', 'telesales', 'hip', 'hip-career', 'hip-broker',
   'field-hip', 'direct-pay-hip', 'telesales-hip', 'thank-you',
-  'dashboard', 'agent-intake', 'new-hires', 'populate-form', 'populate',
+  'dashboard', 'agent-intake', 'agency-intake', 'new-hires', 'populate-form', 'populate',
   'agent-tracking', 'agent-database', 'crm-team', 'crm',
 ]);
 
