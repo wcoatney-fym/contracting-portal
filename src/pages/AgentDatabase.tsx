@@ -553,8 +553,8 @@ export const AgentDatabase: React.FC = () => {
     <div className="p-8">
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-navy-600">Agent Database</h1>
-          <p className="text-gray-600 mt-1">Complete repository of all contracted agents</p>
+          <h1 className="text-3xl font-bold text-navy-600">FYM Internal Agent Database</h1>
+          <p className="text-gray-600 mt-1">Complete repository of all contracted FYM, Wisechoice, and Aspire agents</p>
         </div>
         <button
           onClick={handleExportCsv}
