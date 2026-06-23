@@ -71,7 +71,7 @@ export const RosterTab: React.FC = () => {
     setLoading(true);
     const [uploadsRes, agencyRes] = await Promise.all([
       supabase.from('crm_roster_uploads').select('*').order('uploaded_at', { ascending: false }),
-      supabase.from('crm_agencies').select('name').eq('is_active', true).order('name'),
+      supabase.from('crm_agencies').select('name').eq('is_active', true).eq('crm_enabled', true).order('name'),
     ]);
 
     const names = (agencyRes.data || []).map((a: { name: string }) => a.name);

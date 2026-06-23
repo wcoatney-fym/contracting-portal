@@ -130,6 +130,7 @@ export type CrmAgency = {
   business_logo_url: string | null;
   cross_sell_confirmed: boolean;
   is_alumni: boolean;
+  crm_enabled: boolean;
   created_at: string;
   updated_at: string;
 };

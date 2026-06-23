@@ -88,7 +88,7 @@ export const KpiDashboardTab: React.FC<KpiDashboardTabProps> = ({ onNavigate }) 
 
   const loadData = async () => {
     const [agencyRes, kpiRes, notifRes, pipelineRes, ghlRes, ticketRes, cancelRes] = await Promise.all([
-      supabase.from('crm_agencies').select('*').order('name'),
+      supabase.from('crm_agencies').select('*').eq('crm_enabled', true).order('name'),
       supabase.from('agency_kpis').select('*').order('computed_at', { ascending: false }),
       supabase.from('crm_notifications').select('*, crm_agencies(name)').order('created_at', { ascending: false }).limit(15),
       supabase.from('crm_pipeline').select('agency, stage'),

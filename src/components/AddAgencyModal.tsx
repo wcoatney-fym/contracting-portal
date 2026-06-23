@@ -70,6 +70,7 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
         portal_password: portalPassword,
         date_created: dateCreated || null,
         zaps_paused: existingAgency,
+        crm_enabled: true,
       })
       .select()
       .maybeSingle();

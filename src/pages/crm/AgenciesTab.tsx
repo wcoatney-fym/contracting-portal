@@ -47,7 +47,7 @@ export const AgenciesTab: React.FC = () => {
   const loadAgencies = async () => {
     setLoading(true);
     const [agencyRes, uploadsRes] = await Promise.all([
-      supabase.from('crm_agencies').select('*').order('name'),
+      supabase.from('crm_agencies').select('*').eq('crm_enabled', true).order('name'),
       supabase.from('crm_roster_uploads').select('id, agency').order('uploaded_at', { ascending: false }),
     ]);
 

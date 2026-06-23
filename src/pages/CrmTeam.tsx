@@ -235,7 +235,7 @@ export const CrmTeam: React.FC = () => {
     const loadData = async () => {
       const [unreadRes, agencyRes] = await Promise.all([
         supabase.from('crm_notifications').select('id', { count: 'exact', head: true }).eq('is_read', false),
-        supabase.from('crm_agencies').select('*').eq('is_active', true).order('name'),
+        supabase.from('crm_agencies').select('*').eq('is_active', true).eq('crm_enabled', true).order('name'),
       ]);
       setUnreadCount(unreadRes.count || 0);
       setAgencies(agencyRes.data || []);
