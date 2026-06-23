@@ -7,8 +7,8 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/agent-intake', icon: ClipboardList, label: 'Agent Intake' },
   { to: '/agency-intake', icon: Landmark, label: 'Agency Intake' },
-  { to: '/agent-tracking', icon: Users, label: 'Internal Form Tracking' },
   { to: '/rosters', icon: FileSpreadsheet, label: 'Rosters' },
+  { to: '/agent-tracking', icon: Users, label: 'Internal Form Tracking' },
   { to: '/crm-team', icon: Building2, label: 'CRM Team' },
 ];
 

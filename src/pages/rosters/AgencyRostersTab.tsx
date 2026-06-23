@@ -8,8 +8,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
+  CheckCircle2,
+  Plus,
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase, generateSlug, RESERVED_SLUGS } from '../../lib/supabase';
 
 type RosterUpload = {
   id: string;
@@ -31,6 +33,7 @@ type AgencyWithRoster = {
   name: string;
   upload: RosterUpload | null;
   populatedCount: number;
+  inCrm: boolean;
 };
 
 const PAGE_SIZE = 50;
@@ -43,6 +46,7 @@ export const AgencyRostersTab: React.FC = () => {
   const [allRows, setAllRows] = useState<RosterRow[]>([]);
   const [page, setPage] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
+  const [addingToCrm, setAddingToCrm] = useState<string | null>(null);
 
   useEffect(() => {
     loadAgencies();
@@ -75,6 +79,13 @@ export const AgencyRostersTab: React.FC = () => {
       agencyQuery = agencyQuery.or(`id.eq.${fymId},parent_agency_id.eq.${fymId}`);
     }
 
+    const { data: allCrmAgencies } = await supabase
+      .from('crm_agencies')
+      .select('name')
+      .eq('is_active', true);
+
+    const allCrmNames = new Set((allCrmAgencies || []).map((a: { name: string }) => a.name));
+
     const [agencyRes, uploadsRes] = await Promise.all([
       agencyQuery,
       supabase
@@ -83,7 +94,7 @@ export const AgencyRostersTab: React.FC = () => {
         .order('uploaded_at', { ascending: false }),
     ]);
 
-    const names: string[] = (agencyRes.data || []).map((a: { name: string }) => a.name);
+    const fymFamilyNames: string[] = (agencyRes.data || []).map((a: { name: string }) => a.name);
     const uploads = uploadsRes.data || [];
 
     const uploadByAgency: Record<string, RosterUpload> = {};
@@ -93,7 +104,21 @@ export const AgencyRostersTab: React.FC = () => {
       }
     }
 
-    const uploadIds = Object.values(uploadByAgency).map((u) => u.id);
+    // Find agencies from roster uploads that aren't in CRM at all
+    const nonCrmRosterAgencies: string[] = [];
+    for (const agencyName of Object.keys(uploadByAgency)) {
+      if (!allCrmNames.has(agencyName) && !fymFamilyNames.includes(agencyName)) {
+        nonCrmRosterAgencies.push(agencyName);
+      }
+    }
+    nonCrmRosterAgencies.sort();
+
+    const allNames = [...fymFamilyNames, ...nonCrmRosterAgencies];
+
+    const uploadIds = allNames
+      .map((name) => uploadByAgency[name]?.id)
+      .filter(Boolean) as string[];
+
     let populatedByUploadId: Record<string, number> = {};
 
     if (uploadIds.length > 0) {
@@ -111,14 +136,59 @@ export const AgencyRostersTab: React.FC = () => {
       }
     }
 
-    const result: AgencyWithRoster[] = names.map((name) => ({
+    const result: AgencyWithRoster[] = allNames.map((name) => ({
       name,
       upload: uploadByAgency[name] || null,
       populatedCount: uploadByAgency[name] ? (populatedByUploadId[uploadByAgency[name].id] || 0) : 0,
+      inCrm: fymFamilyNames.includes(name),
     }));
 
     setAgencies(result);
     setLoading(false);
+  };
+
+  const handleAddToCrm = async (agencyName: string) => {
+    setAddingToCrm(agencyName);
+
+    const slug = generateSlug(agencyName);
+    if (RESERVED_SLUGS.has(slug)) {
+      alert(`Cannot add "${agencyName}" - name conflicts with a reserved URL path.`);
+      setAddingToCrm(null);
+      return;
+    }
+
+    const { data: fymRecord } = await supabase
+      .from('crm_agencies')
+      .select('id')
+      .eq('name', 'FYM')
+      .maybeSingle();
+
+    if (!fymRecord) {
+      alert('Could not find FYM parent agency.');
+      setAddingToCrm(null);
+      return;
+    }
+
+    const portalPassword = `${agencyName}CRMPortal!`;
+
+    const { error } = await supabase.from('crm_agencies').insert({
+      name: agencyName,
+      agency_type: 'sub',
+      parent_agency_id: fymRecord.id,
+      is_active: true,
+      onboarding_status: 'onboarding_complete',
+      portal_password: portalPassword,
+      date_created: new Date().toISOString().slice(0, 10),
+    });
+
+    if (error) {
+      alert(`Failed to add agency: ${error.message}`);
+      setAddingToCrm(null);
+      return;
+    }
+
+    await loadAgencies();
+    setAddingToCrm(null);
   };
 
   const loadRows = async () => {
@@ -326,11 +396,28 @@ export const AgencyRostersTab: React.FC = () => {
               className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
             >
               <div className="bg-gray-50 px-5 py-4 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-navy-600 flex items-center justify-center">
-                    <FileSpreadsheet className="w-5 h-5 text-white" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-navy-600 flex items-center justify-center flex-shrink-0">
+                      <FileSpreadsheet className="w-5 h-5 text-white" />
+                    </div>
+                    <h3 className="text-sm font-bold text-gray-800 truncate">{agency.name}</h3>
                   </div>
-                  <h3 className="text-sm font-bold text-gray-800 truncate">{agency.name}</h3>
+                  {agency.inCrm ? (
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      <span className="text-xs font-medium text-emerald-600">In CRM</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleAddToCrm(agency.name)}
+                      disabled={addingToCrm === agency.name}
+                      className="flex items-center gap-1.5 flex-shrink-0 ml-2 px-2.5 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors text-xs font-medium disabled:opacity-50"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      {addingToCrm === agency.name ? 'Adding...' : 'Add to CRM'}
+                    </button>
+                  )}
                 </div>
               </div>
 
