@@ -67,7 +67,7 @@ export const Hierarchy: React.FC = () => {
       supabase.from('agents').select('agency').eq('status', 'completed'),
     ]);
 
-    const allAgencies = agencyRes.data || [];
+    const allAgencies = (agencyRes.data || []).filter(a => !a.is_test);
     setAgencies(allAgencies);
 
     const counts: Record<string, number> = {};
@@ -658,3 +658,6 @@ const AddAgencyHierarchyModal: React.FC<{
     </div>
   );
 };
+
+
+export { Hierarchy }
