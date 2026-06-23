@@ -131,6 +131,12 @@ export type CrmAgency = {
   cross_sell_confirmed: boolean;
   is_alumni: boolean;
   crm_enabled: boolean;
+  agency_npn: string | null;
+  agency_ein: string | null;
+  principal_agent: string | null;
+  principal_agent_npn: string | null;
+  contracting_email: string | null;
+  contracting_contact: string | null;
   created_at: string;
   updated_at: string;
 };

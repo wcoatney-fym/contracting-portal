@@ -124,7 +124,14 @@ export const Hierarchy: React.FC = () => {
     setSelectedAgency(updated);
   };
 
-  const handleAddAgency = async (name: string, parentId: string) => {
+  const handleAddAgency = async (name: string, parentId: string, contracting: {
+    agency_npn: string;
+    agency_ein: string;
+    principal_agent: string;
+    principal_agent_npn: string;
+    contracting_email: string;
+    contracting_contact: string;
+  }) => {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const portalPassword = `${name}CRMPortal!`;
 
@@ -140,6 +147,12 @@ export const Hierarchy: React.FC = () => {
         slug,
         portal_password: portalPassword,
         date_created: new Date().toISOString().slice(0, 10),
+        agency_npn: contracting.agency_npn.trim() || null,
+        agency_ein: contracting.agency_ein.trim() || null,
+        principal_agent: contracting.principal_agent.trim() || null,
+        principal_agent_npn: contracting.principal_agent_npn.trim() || null,
+        contracting_email: contracting.contracting_email.trim() || null,
+        contracting_contact: contracting.contracting_contact.trim() || null,
       })
       .select()
       .maybeSingle();
@@ -272,6 +285,14 @@ const TreeNode: React.FC<{
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
   const isRoot = node.agency_type === 'main';
+  const isFym = node.name.toLowerCase() === 'fym';
+  const isContractingIncomplete = !isFym && !isRoot && (
+    !node.agency_npn?.trim() ||
+    !node.agency_ein?.trim() ||
+    !node.principal_agent?.trim() ||
+    !node.principal_agent_npn?.trim() ||
+    !node.contracting_email?.trim()
+  );
 
   const depthColors = [
     'bg-navy-100 text-navy-700',
@@ -321,6 +342,11 @@ const TreeNode: React.FC<{
               {node.is_test && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 uppercase tracking-wider">
                   Test
+                </span>
+              )}
+              {isContractingIncomplete && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 uppercase tracking-wider">
+                  Incomplete
                 </span>
               )}
             </div>
@@ -429,14 +455,26 @@ const DeleteConfirmModal: React.FC<{
 const AddAgencyHierarchyModal: React.FC<{
   agencies: CrmAgency[];
   onClose: () => void;
-  onAdd: (name: string, parentId: string) => Promise<string | null>;
+  onAdd: (name: string, parentId: string, contracting: {
+    agency_npn: string;
+    agency_ein: string;
+    principal_agent: string;
+    principal_agent_npn: string;
+    contracting_email: string;
+    contracting_contact: string;
+  }) => Promise<string | null>;
 }> = ({ agencies, onClose, onAdd }) => {
   const [name, setName] = useState('');
   const [parentId, setParentId] = useState('');
+  const [agencyNpn, setAgencyNpn] = useState('');
+  const [agencyEin, setAgencyEin] = useState('');
+  const [principalAgent, setPrincipalAgent] = useState('');
+  const [principalAgentNpn, setPrincipalAgentNpn] = useState('');
+  const [contractingEmail, setContractingEmail] = useState('');
+  const [contractingContact, setContractingContact] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const sortedAgencies = [...agencies].sort((a, b) => a.name.localeCompare(b.name));
   const rootAgency = agencies.find(a => a.agency_type === 'main');
 
   useEffect(() => {
@@ -444,18 +482,6 @@ const AddAgencyHierarchyModal: React.FC<{
       setParentId(rootAgency.id);
     }
   }, [rootAgency, parentId]);
-
-  const getIndentLevel = (agency: CrmAgency): number => {
-    let level = 0;
-    let current = agency;
-    while (current.parent_agency_id) {
-      level++;
-      const parent = agencies.find(a => a.id === current.parent_agency_id);
-      if (!parent) break;
-      current = parent;
-    }
-    return level;
-  };
 
   const buildFlatList = (): { agency: CrmAgency; indent: number }[] => {
     const result: { agency: CrmAgency; indent: number }[] = [];
@@ -474,14 +500,29 @@ const AddAgencyHierarchyModal: React.FC<{
 
   const flatList = buildFlatList();
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError('Agency name is required.'); return; }
     if (!parentId) { setError('Select a parent agency.'); return; }
+    if (!agencyNpn.trim()) { setError('Agency NPN is required.'); return; }
+    if (!agencyEin.trim()) { setError('Agency EIN is required.'); return; }
+    if (!principalAgent.trim()) { setError('Principal Agent name is required.'); return; }
+    if (!principalAgentNpn.trim()) { setError('Principal Agent NPN is required.'); return; }
+    if (!contractingEmail.trim()) { setError('Contracting email is required.'); return; }
+    if (!emailRegex.test(contractingEmail.trim())) { setError('Please enter a valid email address.'); return; }
 
     setSubmitting(true);
     setError('');
-    const err = await onAdd(name.trim(), parentId);
+    const err = await onAdd(name.trim(), parentId, {
+      agency_npn: agencyNpn,
+      agency_ein: agencyEin,
+      principal_agent: principalAgent,
+      principal_agent_npn: principalAgentNpn,
+      contracting_email: contractingEmail,
+      contracting_contact: contractingContact,
+    });
     if (err) {
       setError(err.includes('23505') ? 'An agency with this name already exists.' : err);
     }
@@ -490,16 +531,18 @@ const AddAgencyHierarchyModal: React.FC<{
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-steel-200">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-steel-200 flex-shrink-0">
           <h3 className="font-semibold text-steel-900">Add New Agency</h3>
           <button onClick={onClose} className="p-1.5 hover:bg-steel-100 rounded-lg">
             <X className="w-5 h-5 text-steel-400" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
           <div>
-            <label className="block text-sm font-medium text-steel-700 mb-1">Agency Name</label>
+            <label className="block text-sm font-medium text-steel-700 mb-1">
+              Agency Name <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={name}
@@ -521,8 +564,86 @@ const AddAgencyHierarchyModal: React.FC<{
                 </option>
               ))}
             </select>
-            <p className="text-xs text-steel-500 mt-1">New agencies are always added as children of the selected parent.</p>
           </div>
+
+          <div className="border-t border-steel-200 pt-4">
+            <p className="text-xs font-semibold text-steel-500 uppercase tracking-wider mb-3">Contracting Details</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-steel-700 mb-1">
+                  Agency NPN <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={agencyNpn}
+                  onChange={(e) => { setAgencyNpn(e.target.value); setError(''); }}
+                  className="w-full px-3 py-2 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  placeholder="e.g. 12345678"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-steel-700 mb-1">
+                  Agency EIN <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={agencyEin}
+                  onChange={(e) => { setAgencyEin(e.target.value); setError(''); }}
+                  className="w-full px-3 py-2 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  placeholder="e.g. 12-3456789"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-steel-700 mb-1">
+                  Principal Agent <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={principalAgent}
+                  onChange={(e) => { setPrincipalAgent(e.target.value); setError(''); }}
+                  className="w-full px-3 py-2 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  placeholder="Full name"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-steel-700 mb-1">
+                  Principal Agent NPN <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={principalAgentNpn}
+                  onChange={(e) => { setPrincipalAgentNpn(e.target.value); setError(''); }}
+                  className="w-full px-3 py-2 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  placeholder="e.g. 87654321"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-steel-700 mb-1">
+                  Contracting Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={contractingEmail}
+                  onChange={(e) => { setContractingEmail(e.target.value); setError(''); }}
+                  className="w-full px-3 py-2 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-steel-700 mb-1">
+                  Contracting Contact
+                </label>
+                <input
+                  type="text"
+                  value={contractingContact}
+                  onChange={(e) => { setContractingContact(e.target.value); setError(''); }}
+                  className="w-full px-3 py-2 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  placeholder="If applicable"
+                />
+              </div>
+            </div>
+          </div>
+
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-steel-700 border border-steel-300 rounded-lg hover:bg-steel-50">
