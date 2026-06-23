@@ -15,6 +15,7 @@ import { DirectPay } from './pages/forms/DirectPay';
 import { Telesales } from './pages/forms/Telesales';
 import { HIP } from './pages/forms/HIP';
 import { ThankYou } from './pages/ThankYou';
+import { FymAgentResources } from './pages/FymAgentResources';
 import { AgencyPortal } from './pages/AgencyPortal';
 import { supabase } from './lib/supabase';
 import { AlertCircle } from 'lucide-react';
@@ -22,6 +23,7 @@ import { AlertCircle } from 'lucide-react';
 const KNOWN_PATHS = new Set([
   '', 'dashboard', 'agent-intake', 'new-hires', 'populate-form', 'populate',
   'agent-tracking', 'agent-database', 'hierarchy', 'crm-team', 'crm',
+  'fym-agent-resources',
 ]);
 
 const ProtectedApp: React.FC = () => {
@@ -150,6 +152,7 @@ function App() {
           <Route path="/direct-pay-hip" element={<HIP />} />
           <Route path="/telesales-hip" element={<HIP />} />
           <Route path="/thank-you" element={<ThankYou />} />
+          <Route path="/fym-agent-resources" element={<FymAgentResources />} />
           <Route path="/*" element={<ProtectedApp />} />
         </Routes>
       </BrowserRouter>
