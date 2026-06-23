@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, Users, FileSpreadsheet, LogOut, Building2, Landmark, Menu, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Users, Network, LogOut, Building2, Landmark, Menu, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/agent-intake', icon: ClipboardList, label: 'Agent Intake' },
   { to: '/agency-intake', icon: Landmark, label: 'Agency Intake' },
-  { to: '/rosters', icon: FileSpreadsheet, label: 'Rosters' },
+  { to: '/hierarchy', icon: Network, label: 'Hierarchy' },
   { to: '/agent-tracking', icon: Users, label: 'Internal Form Tracking' },
   { to: '/crm-team', icon: Building2, label: 'CRM Team' },
 ];
@@ -17,7 +17,7 @@ const breadcrumbMap: Record<string, string> = {
   '/agent-intake': 'Agent Intake',
   '/agency-intake': 'Agency Intake',
   '/agent-tracking': 'Internal Form Tracking',
-  '/rosters': 'Rosters',
+  '/hierarchy': 'Hierarchy',
   '/crm-team': 'CRM Team',
 };
 

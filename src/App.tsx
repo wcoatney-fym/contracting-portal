@@ -7,7 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { AgentIntake } from './pages/AgentIntake';
 import { AgencyIntake } from './pages/AgencyIntake';
 import { AgentTracking } from './pages/AgentTracking';
-import { Rosters } from './pages/Rosters';
+import { Hierarchy } from './pages/hierarchy/Hierarchy';
 import { CrmTeam } from './pages/CrmTeam';
 import { LifeOnly } from './pages/forms/LifeOnly';
 import { Field } from './pages/forms/Field';
@@ -21,7 +21,7 @@ import { AlertCircle } from 'lucide-react';
 
 const KNOWN_PATHS = new Set([
   '', 'dashboard', 'agent-intake', 'agency-intake', 'new-hires', 'populate-form', 'populate',
-  'agent-tracking', 'agent-database', 'rosters', 'crm-team', 'crm',
+  'agent-tracking', 'agent-database', 'rosters', 'hierarchy', 'crm-team', 'crm',
 ]);
 
 const ProtectedApp: React.FC = () => {
@@ -126,8 +126,9 @@ const ProtectedApp: React.FC = () => {
         <Route path="populate-form" element={<AgentIntake />} />
         <Route path="populate" element={<AgentIntake />} />
         <Route path="agent-tracking" element={<AgentTracking />} />
-        <Route path="rosters" element={<Rosters />} />
-        <Route path="agent-database" element={<Rosters />} />
+        <Route path="hierarchy" element={<Hierarchy />} />
+        <Route path="rosters" element={<Hierarchy />} />
+        <Route path="agent-database" element={<Hierarchy />} />
         <Route path="crm-team" element={<CrmTeam />} />
         <Route path="crm" element={<CrmTeam />} />
       </Route>

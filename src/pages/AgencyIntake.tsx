@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { supabase, generateSlug, RESERVED_SLUGS } from '../lib/supabase';
 import type { CrmAgency } from '../lib/supabase';
+import { flattenTreeIndented } from './hierarchy/hierarchyHelpers';
 
 interface AgencyFormData {
   name: string;
@@ -20,7 +21,6 @@ interface AgencyFormData {
   ownerLastName: string;
   ownerEmail: string;
   ownerPhone: string;
-  agencyType: 'main' | 'sub';
   parentAgencyId: string;
   seatCount: string;
   dateCreated: string;
@@ -33,7 +33,6 @@ const initialFormData: AgencyFormData = {
   ownerLastName: '',
   ownerEmail: '',
   ownerPhone: '',
-  agencyType: 'main',
   parentAgencyId: '',
   seatCount: '',
   dateCreated: new Date().toISOString().slice(0, 10),
@@ -42,7 +41,7 @@ const initialFormData: AgencyFormData = {
 
 export const AgencyIntake: React.FC = () => {
   const [formData, setFormData] = useState<AgencyFormData>(initialFormData);
-  const [mainAgencies, setMainAgencies] = useState<CrmAgency[]>([]);
+  const [allAgencies, setAllAgencies] = useState<CrmAgency[]>([]);
   const [recentAgencies, setRecentAgencies] = useState<CrmAgency[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,18 +59,17 @@ export const AgencyIntake: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
-    loadMainAgencies();
+    loadAllAgencies();
     loadRecentAgencies();
   }, []);
 
-  const loadMainAgencies = async () => {
+  const loadAllAgencies = async () => {
     const { data } = await supabase
       .from('crm_agencies')
       .select('*')
-      .eq('agency_type', 'main')
       .eq('is_active', true)
       .order('name');
-    setMainAgencies(data || []);
+    setAllAgencies(data || []);
   };
 
   const loadRecentAgencies = async () => {
@@ -114,11 +112,7 @@ export const AgencyIntake: React.FC = () => {
       return;
     }
 
-    if (formData.agencyType === 'sub' && !formData.parentAgencyId) {
-      setError('Please select a parent agency for sub-agencies.');
-      setLoading(false);
-      return;
-    }
+    const agencyType = formData.parentAgencyId ? 'sub' : 'main';
 
     const slug = generateSlug(trimmedName);
     if (RESERVED_SLUGS.has(slug)) {
@@ -138,8 +132,8 @@ export const AgencyIntake: React.FC = () => {
         name: trimmedName,
         onboarding_status: formData.existingAgency ? 'onboarding_complete' : 'pending_csr_assignment',
         is_active: true,
-        agency_type: formData.agencyType,
-        parent_agency_id: formData.agencyType === 'sub' ? formData.parentAgencyId : null,
+        agency_type: agencyType,
+        parent_agency_id: formData.parentAgencyId || null,
         slug,
         portal_password: portalPassword,
         date_created: formData.dateCreated || null,
@@ -161,13 +155,13 @@ export const AgencyIntake: React.FC = () => {
     }
 
     if (newAgency) {
-      const parentName = formData.agencyType === 'sub'
-        ? mainAgencies.find((a) => a.id === formData.parentAgencyId)?.name || null
+      const parentName = formData.parentAgencyId
+        ? allAgencies.find((a) => a.id === formData.parentAgencyId)?.name || null
         : null;
 
       const message = formData.existingAgency
         ? `Existing agency "${trimmedName}" added via contracting intake -- zaps paused for backfill`
-        : formData.agencyType === 'sub'
+        : parentName
           ? `New sub-agency "${trimmedName}" added under ${parentName} via contracting intake`
           : `New agency "${trimmedName}" added via contracting intake -- begin onboarding`;
 
@@ -182,13 +176,13 @@ export const AgencyIntake: React.FC = () => {
         slug,
         password: portalPassword,
         portalUrl,
-        agencyType: formData.agencyType,
+        agencyType,
         parentName,
       });
 
       setFormData(initialFormData);
       loadRecentAgencies();
-      loadMainAgencies();
+      loadAllAgencies();
     }
 
     setLoading(false);
@@ -376,51 +370,23 @@ export const AgencyIntake: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Agency Type</label>
-              <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, agencyType: 'main', parentAgencyId: '' })}
-                  className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-                    formData.agencyType === 'main'
-                      ? 'bg-navy-600 text-white'
-                      : 'bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  Main Agency
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, agencyType: 'sub' })}
-                  className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors border-l border-gray-300 ${
-                    formData.agencyType === 'sub'
-                      ? 'bg-navy-600 text-white'
-                      : 'bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  Sub Agency
-                </button>
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Direct Upline</label>
+              <select
+                value={formData.parentAgencyId}
+                onChange={(e) => setFormData({ ...formData, parentAgencyId: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm bg-white"
+              >
+                <option value="">None (top-level agency)</option>
+                {flattenTreeIndented(allAgencies).map(({ agency: a, depth }) => (
+                  <option key={a.id} value={a.id}>
+                    {'\u00A0\u00A0'.repeat(depth)}{depth > 0 ? '\u2514\u2500 ' : ''}{a.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Select which agency this new agency reports to in the hierarchy. Leave blank for a top-level agency.
+              </p>
             </div>
-
-            {formData.agencyType === 'sub' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Parent Agency</label>
-                <select
-                  value={formData.parentAgencyId}
-                  onChange={(e) => setFormData({ ...formData, parentAgencyId: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm bg-white"
-                >
-                  <option value="">Select a parent agency...</option>
-                  {mainAgencies.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-                {mainAgencies.length === 0 && (
-                  <p className="text-xs text-amber-600 mt-1">No active main agencies found.</p>
-                )}
-              </div>
-            )}
 
             <label className="flex items-center gap-2.5 cursor-pointer group">
               <input
