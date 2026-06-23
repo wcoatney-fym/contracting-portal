@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GitBranch, Plus, Search, Building2, Users, ChevronDown, ChevronRight, Monitor, X } from 'lucide-react';
+import { GitBranch, Plus, Search, Building2, Users, ChevronDown, ChevronRight, Monitor, X, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { CrmAgency } from '../lib/supabase';
 import { AgencyDetailPanel } from './hierarchy/AgencyDetailPanel';
@@ -9,6 +9,46 @@ type AgencyNode = CrmAgency & {
   agentCount: number;
 };
 
+function buildRecursiveTree(agencies: CrmAgency[], agentCounts: Record<string, number>): AgencyNode[] {
+  const map = new Map<string, AgencyNode>();
+  for (const a of agencies) {
+    map.set(a.id, { ...a, children: [], agentCount: agentCounts[a.name] || 0 });
+  }
+  const roots: AgencyNode[] = [];
+  for (const node of map.values()) {
+    if (node.parent_agency_id && map.has(node.parent_agency_id)) {
+      map.get(node.parent_agency_id)!.children.push(node);
+    } else if (!node.parent_agency_id) {
+      roots.push(node);
+    }
+  }
+  const sortChildren = (nodes: AgencyNode[]) => {
+    nodes.sort((a, b) => a.name.localeCompare(b.name));
+    for (const n of nodes) sortChildren(n.children);
+  };
+  sortChildren(roots);
+  return roots;
+}
+
+function getDescendantIds(node: AgencyNode): string[] {
+  const ids: string[] = [];
+  for (const child of node.children) {
+    ids.push(child.id);
+    ids.push(...getDescendantIds(child));
+  }
+  return ids;
+}
+
+function collectAllAncestorIds(agencyId: string, agencies: CrmAgency[]): string[] {
+  const ids: string[] = [];
+  let current = agencies.find(a => a.id === agencyId);
+  while (current?.parent_agency_id) {
+    ids.push(current.parent_agency_id);
+    current = agencies.find(a => a.id === current!.parent_agency_id);
+  }
+  return ids;
+}
+
 export const Hierarchy: React.FC = () => {
   const [agencies, setAgencies] = useState<CrmAgency[]>([]);
   const [agentCounts, setAgentCounts] = useState<Record<string, number>>({});
@@ -17,6 +57,8 @@ export const Hierarchy: React.FC = () => {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedAgency, setSelectedAgency] = useState<CrmAgency | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AgencyNode | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -34,48 +76,33 @@ export const Hierarchy: React.FC = () => {
     }
     setAgentCounts(counts);
 
-    const mainIds = allAgencies.filter(a => a.agency_type === 'main').map(a => a.id);
-    setExpandedNodes(new Set(mainIds));
+    const allIds = allAgencies.map(a => a.id);
+    setExpandedNodes(new Set(allIds));
     setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const buildTree = (): AgencyNode[] => {
-    const mainAgencies = agencies
-      .filter(a => a.agency_type === 'main')
-      .map(a => ({
-        ...a,
-        agentCount: agentCounts[a.name] || 0,
-        children: agencies
-          .filter(sub => sub.parent_agency_id === a.id)
-          .map(sub => ({
-            ...sub,
-            agentCount: agentCounts[sub.name] || 0,
-            children: agencies
-              .filter(child => child.parent_agency_id === sub.id)
-              .map(child => ({ ...child, agentCount: agentCounts[child.name] || 0, children: [] })),
-          })),
-      }));
-    return mainAgencies;
-  };
+  const tree = React.useMemo(() => buildRecursiveTree(agencies, agentCounts), [agencies, agentCounts]);
 
   const filteredTree = (): AgencyNode[] => {
-    if (!search.trim()) return buildTree();
+    if (!search.trim()) return tree;
     const term = search.toLowerCase();
     const matchingIds = new Set(
       agencies.filter(a => a.name.toLowerCase().includes(term)).map(a => a.id)
     );
-    const parentIds = new Set<string>();
-    agencies.forEach(a => {
-      if (matchingIds.has(a.id) && a.parent_agency_id) {
-        parentIds.add(a.parent_agency_id);
-        const parent = agencies.find(p => p.id === a.parent_agency_id);
-        if (parent?.parent_agency_id) parentIds.add(parent.parent_agency_id);
+    const ancestorIds = new Set<string>();
+    for (const id of matchingIds) {
+      for (const aid of collectAllAncestorIds(id, agencies)) {
+        ancestorIds.add(aid);
       }
-    });
-    const visibleIds = new Set([...matchingIds, ...parentIds]);
-    return buildTree().filter(node => isNodeVisible(node, visibleIds));
+    }
+    const visibleIds = new Set([...matchingIds, ...ancestorIds]);
+    const filterNodes = (nodes: AgencyNode[]): AgencyNode[] =>
+      nodes
+        .filter(n => isNodeVisible(n, visibleIds))
+        .map(n => ({ ...n, children: filterNodes(n.children) }));
+    return filterNodes(tree);
   };
 
   const isNodeVisible = (node: AgencyNode, visibleIds: Set<string>): boolean => {
@@ -97,7 +124,7 @@ export const Hierarchy: React.FC = () => {
     setSelectedAgency(updated);
   };
 
-  const handleAddAgency = async (name: string, agencyType: 'main' | 'sub', parentId: string | null) => {
+  const handleAddAgency = async (name: string, parentId: string) => {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const portalPassword = `${name}CRMPortal!`;
 
@@ -105,7 +132,7 @@ export const Hierarchy: React.FC = () => {
       .from('crm_agencies')
       .insert({
         name,
-        agency_type: agencyType,
+        agency_type: 'sub',
         parent_agency_id: parentId,
         onboarding_status: 'pending_csr_assignment',
         is_active: true,
@@ -119,9 +146,29 @@ export const Hierarchy: React.FC = () => {
 
     if (!error && data) {
       setAgencies(prev => [...prev, data]);
+      setExpandedNodes(prev => new Set([...prev, data.id, parentId]));
       setShowAddModal(false);
     }
     return error?.message || null;
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { error } = await supabase
+      .from('crm_agencies')
+      .delete()
+      .eq('id', deleteTarget.id);
+
+    if (!error) {
+      const removedIds = new Set([deleteTarget.id, ...getDescendantIds(deleteTarget)]);
+      setAgencies(prev => prev.filter(a => !removedIds.has(a.id)));
+      if (selectedAgency && removedIds.has(selectedAgency.id)) {
+        setSelectedAgency(null);
+      }
+    }
+    setDeleting(false);
+    setDeleteTarget(null);
   };
 
   if (loading) {
@@ -132,7 +179,7 @@ export const Hierarchy: React.FC = () => {
     );
   }
 
-  const tree = filteredTree();
+  const displayTree = filteredTree();
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -167,7 +214,7 @@ export const Hierarchy: React.FC = () => {
       </div>
 
       <div className="space-y-2">
-        {tree.map(node => (
+        {displayTree.map(node => (
           <TreeNode
             key={node.id}
             node={node}
@@ -175,9 +222,10 @@ export const Hierarchy: React.FC = () => {
             expandedNodes={expandedNodes}
             onToggle={toggleExpand}
             onSelect={setSelectedAgency}
+            onDelete={setDeleteTarget}
           />
         ))}
-        {tree.length === 0 && (
+        {displayTree.length === 0 && (
           <div className="text-center py-12 text-steel-500">
             {search ? 'No agencies match your search.' : 'No agencies found.'}
           </div>
@@ -200,6 +248,15 @@ export const Hierarchy: React.FC = () => {
           onAdd={handleAddAgency}
         />
       )}
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          node={deleteTarget}
+          deleting={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };
@@ -210,14 +267,24 @@ const TreeNode: React.FC<{
   expandedNodes: Set<string>;
   onToggle: (id: string) => void;
   onSelect: (agency: CrmAgency) => void;
-}> = ({ node, depth, expandedNodes, onToggle, onSelect }) => {
+  onDelete: (node: AgencyNode) => void;
+}> = ({ node, depth, expandedNodes, onToggle, onSelect, onDelete }) => {
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
+  const isRoot = node.agency_type === 'main';
+
+  const depthColors = [
+    'bg-navy-100 text-navy-700',
+    'bg-emerald-100 text-emerald-700',
+    'bg-amber-100 text-amber-700',
+    'bg-sky-100 text-sky-700',
+    'bg-rose-100 text-rose-700',
+  ];
 
   return (
     <div>
       <div
-        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
+        className={`group flex items-center gap-3 px-4 py-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
           node.crm_enabled
             ? 'bg-white border-steel-200 hover:border-navy-300'
             : 'bg-steel-50 border-steel-200 hover:border-steel-300'
@@ -238,11 +305,7 @@ const TreeNode: React.FC<{
           className="flex items-center gap-3 flex-1 min-w-0"
           onClick={() => onSelect(node)}
         >
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-            depth === 0 ? 'bg-navy-100 text-navy-700' :
-            depth === 1 ? 'bg-emerald-100 text-emerald-700' :
-            'bg-amber-100 text-amber-700'
-          }`}>
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${depthColors[depth % depthColors.length]}`}>
             <Building2 className="w-4 h-4" />
           </div>
 
@@ -266,14 +329,24 @@ const TreeNode: React.FC<{
                 <Users className="w-3 h-3" />
                 {node.agentCount} agent{node.agentCount !== 1 ? 's' : ''}
               </span>
-              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                node.agency_type === 'main' ? 'bg-navy-50 text-navy-600' : 'bg-steel-100 text-steel-600'
-              }`}>
-                {node.agency_type === 'main' ? 'Main' : 'Sub'}
-              </span>
+              {isRoot && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-navy-50 text-navy-600">
+                  Root
+                </span>
+              )}
             </div>
           </div>
         </div>
+
+        {!isRoot && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(node); }}
+            className="p-1.5 rounded-md text-steel-300 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 transition-all"
+            title="Delete agency"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {hasChildren && isExpanded && (
@@ -290,6 +363,7 @@ const TreeNode: React.FC<{
               expandedNodes={expandedNodes}
               onToggle={onToggle}
               onSelect={onSelect}
+              onDelete={onDelete}
             />
           ))}
         </div>
@@ -298,33 +372,116 @@ const TreeNode: React.FC<{
   );
 };
 
+const DeleteConfirmModal: React.FC<{
+  node: AgencyNode;
+  deleting: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}> = ({ node, deleting, onConfirm, onCancel }) => {
+  const descendantCount = getDescendantIds(node).length;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-steel-900">Delete Agency</h3>
+            <p className="text-sm text-steel-600 mt-1">
+              Are you sure you want to delete <strong>{node.name}</strong>?
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 space-y-1.5 text-sm">
+          <p className="text-red-800 font-medium">This action cannot be undone.</p>
+          <ul className="list-disc list-inside space-y-1 text-xs text-red-700">
+            {descendantCount > 0 && (
+              <li>{descendantCount} child agenc{descendantCount === 1 ? 'y' : 'ies'} will also be deleted</li>
+            )}
+            {node.crm_enabled && <li>This agency is CRM-enabled and will be removed from CRM Team</li>}
+            <li>All associated deals, GHL configs, KPIs, and tickets will be removed</li>
+          </ul>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2.5 text-sm font-medium text-steel-700 border border-steel-300 rounded-lg hover:bg-steel-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="px-4 py-2.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+          >
+            {deleting ? 'Deleting...' : 'Delete Agency'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AddAgencyHierarchyModal: React.FC<{
   agencies: CrmAgency[];
   onClose: () => void;
-  onAdd: (name: string, agencyType: 'main' | 'sub', parentId: string | null) => Promise<string | null>;
+  onAdd: (name: string, parentId: string) => Promise<string | null>;
 }> = ({ agencies, onClose, onAdd }) => {
   const [name, setName] = useState('');
-  const [agencyType, setAgencyType] = useState<'main' | 'sub'>('sub');
   const [parentId, setParentId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const mainAgencies = agencies.filter(a => a.agency_type === 'main' && a.is_active);
+  const sortedAgencies = [...agencies].sort((a, b) => a.name.localeCompare(b.name));
+  const rootAgency = agencies.find(a => a.agency_type === 'main');
 
   useEffect(() => {
-    if (mainAgencies.length > 0 && !parentId) {
-      setParentId(mainAgencies[0].id);
+    if (rootAgency && !parentId) {
+      setParentId(rootAgency.id);
     }
-  }, [mainAgencies, parentId]);
+  }, [rootAgency, parentId]);
+
+  const getIndentLevel = (agency: CrmAgency): number => {
+    let level = 0;
+    let current = agency;
+    while (current.parent_agency_id) {
+      level++;
+      const parent = agencies.find(a => a.id === current.parent_agency_id);
+      if (!parent) break;
+      current = parent;
+    }
+    return level;
+  };
+
+  const buildFlatList = (): { agency: CrmAgency; indent: number }[] => {
+    const result: { agency: CrmAgency; indent: number }[] = [];
+    const addNode = (id: string, depth: number) => {
+      const a = agencies.find(ag => ag.id === id);
+      if (!a) return;
+      result.push({ agency: a, indent: depth });
+      const children = agencies.filter(ag => ag.parent_agency_id === id).sort((x, y) => x.name.localeCompare(y.name));
+      for (const child of children) {
+        addNode(child.id, depth + 1);
+      }
+    };
+    if (rootAgency) addNode(rootAgency.id, 0);
+    return result;
+  };
+
+  const flatList = buildFlatList();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError('Agency name is required.'); return; }
-    if (agencyType === 'sub' && !parentId) { setError('Select a parent agency.'); return; }
+    if (!parentId) { setError('Select a parent agency.'); return; }
 
     setSubmitting(true);
     setError('');
-    const err = await onAdd(name.trim(), agencyType, agencyType === 'sub' ? parentId : null);
+    const err = await onAdd(name.trim(), parentId);
     if (err) {
       setError(err.includes('23505') ? 'An agency with this name already exists.' : err);
     }
@@ -348,50 +505,24 @@ const AddAgencyHierarchyModal: React.FC<{
               value={name}
               onChange={(e) => { setName(e.target.value); setError(''); }}
               className="w-full px-4 py-2.5 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-              placeholder="Agency name"
+              placeholder="New agency name"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-steel-700 mb-2">Type</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setAgencyType('main')}
-                className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors ${
-                  agencyType === 'main'
-                    ? 'bg-navy-50 border-navy-300 text-navy-700 ring-2 ring-navy-500/20'
-                    : 'bg-white border-steel-300 text-steel-700 hover:bg-steel-50'
-                }`}
-              >
-                Main
-              </button>
-              <button
-                type="button"
-                onClick={() => setAgencyType('sub')}
-                className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors ${
-                  agencyType === 'sub'
-                    ? 'bg-navy-50 border-navy-300 text-navy-700 ring-2 ring-navy-500/20'
-                    : 'bg-white border-steel-300 text-steel-700 hover:bg-steel-50'
-                }`}
-              >
-                Sub-Agency
-              </button>
-            </div>
+            <label className="block text-sm font-medium text-steel-700 mb-1">Parent Agency</label>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="w-full px-4 py-2.5 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+            >
+              {flatList.map(({ agency, indent }) => (
+                <option key={agency.id} value={agency.id}>
+                  {'  '.repeat(indent)}{indent > 0 ? '-- ' : ''}{agency.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-steel-500 mt-1">New agencies are always added as children of the selected parent.</p>
           </div>
-          {agencyType === 'sub' && (
-            <div>
-              <label className="block text-sm font-medium text-steel-700 mb-1">Parent Agency</label>
-              <select
-                value={parentId}
-                onChange={(e) => setParentId(e.target.value)}
-                className="w-full px-4 py-2.5 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-              >
-                {mainAgencies.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-steel-700 border border-steel-300 rounded-lg hover:bg-steel-50">
