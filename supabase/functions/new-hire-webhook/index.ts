@@ -172,6 +172,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    await supabase.from("webhook_log").insert({
+      function_name: "new-hire-webhook",
+      payload: { firstName, lastName, email, phoneNumber, formType, agency },
+      outcome: "received",
+    });
+
     const baseUrl = appUrl || "https://fym-agents.bolt.host";
 
     const directAutoSend = !!(formType && FORM_ROUTE_MAP[formType]);

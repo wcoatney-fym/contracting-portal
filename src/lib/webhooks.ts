@@ -45,33 +45,32 @@ interface SubmissionWebhookData {
 }
 
 export const firePopulateWebhook = async (data: PopulateWebhookData): Promise<void> => {
-  try {
-    const response = await fetch(POPULATE_WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phone: data.phone,
-        formType: data.formType,
-        agency: data.agency,
-        generatedUrl: data.generatedUrl,
-        securityCode: data.securityCode,
-        expirationDate: data.expirationDate
-      })
-    });
+  const response = await fetch(POPULATE_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      phone: data.phone,
+      formType: data.formType,
+      agency: data.agency,
+      generatedUrl: data.generatedUrl,
+      securityCode: data.securityCode,
+      expirationDate: data.expirationDate
+    })
+  });
 
-    if (response.ok) {
-      console.log('Populate webhook fired successfully');
-    } else {
-      console.error('Populate webhook failed:', response.status, response.statusText);
-    }
-  } catch (error) {
-    console.error('Populate webhook error:', error);
+  if (!response.ok) {
+    throw new Error(`Populate webhook failed: ${response.status} ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(`Zapier forwarding failed (status ${result.status})`);
   }
 };
 
