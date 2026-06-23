@@ -57,12 +57,26 @@ export const AgencyRostersTab: React.FC = () => {
   const loadAgencies = async () => {
     setLoading(true);
 
+    const { data: fymRecord } = await supabase
+      .from('crm_agencies')
+      .select('id')
+      .eq('name', 'FYM')
+      .maybeSingle();
+
+    const fymId = fymRecord?.id;
+
+    let agencyQuery = supabase
+      .from('crm_agencies')
+      .select('name')
+      .eq('is_active', true)
+      .order('name');
+
+    if (fymId) {
+      agencyQuery = agencyQuery.or(`id.eq.${fymId},parent_agency_id.eq.${fymId}`);
+    }
+
     const [agencyRes, uploadsRes] = await Promise.all([
-      supabase
-        .from('crm_agencies')
-        .select('name')
-        .eq('is_active', true)
-        .order('name'),
+      agencyQuery,
       supabase
         .from('crm_roster_uploads')
         .select('*')
@@ -295,7 +309,7 @@ export const AgencyRostersTab: React.FC = () => {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-navy-700">Agency Rosters</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Read-only view of all agency rosters. These rosters are managed externally.
+          FYM, Wisechoice, Aspire, and affiliated agency rosters. Updated externally.
         </p>
       </div>
 
