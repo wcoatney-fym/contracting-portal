@@ -165,20 +165,15 @@ export const AgencyPortal: React.FC = () => {
       .maybeSingle();
     if (data) {
       setAgency(data);
-      if (data.agency_type === 'main') {
-        const { data: children } = await supabase
-          .from('crm_agencies')
-          .select('*')
-          .eq('parent_agency_id', data.id)
-          .eq('is_active', true)
-          .order('name');
-        const kids = children || [];
-        setChildAgencies(kids);
-        setSelectedAgencyIds([data.id, ...kids.map(c => c.id)]);
-      } else {
-        setChildAgencies([]);
-        setSelectedAgencyIds([data.id]);
-      }
+      const { data: children } = await supabase
+        .from('crm_agencies')
+        .select('*')
+        .eq('parent_agency_id', data.id)
+        .eq('is_active', true)
+        .order('name');
+      const kids = children || [];
+      setChildAgencies(kids);
+      setSelectedAgencyIds([data.id, ...kids.map(c => c.id)]);
     }
   }, [slug]);
 
@@ -202,20 +197,15 @@ export const AgencyPortal: React.FC = () => {
       } else {
         setAgency(data);
 
-        if (data.agency_type === 'main') {
-          const { data: children } = await supabase
-            .from('crm_agencies')
-            .select('*')
-            .eq('parent_agency_id', data.id)
-            .eq('is_active', true)
-            .order('name');
-          const kids = children || [];
-          setChildAgencies(kids);
-          setSelectedAgencyIds([data.id, ...kids.map(c => c.id)]);
-        } else {
-          setChildAgencies([]);
-          setSelectedAgencyIds([data.id]);
-        }
+        const { data: children } = await supabase
+          .from('crm_agencies')
+          .select('*')
+          .eq('parent_agency_id', data.id)
+          .eq('is_active', true)
+          .order('name');
+        const kids = children || [];
+        setChildAgencies(kids);
+        setSelectedAgencyIds([data.id, ...kids.map(c => c.id)]);
 
         const sessionKey = `portal_${slug}_auth`;
         if (sessionStorage.getItem(sessionKey) === 'true') {
