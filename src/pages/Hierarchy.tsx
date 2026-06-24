@@ -62,17 +62,19 @@ export const Hierarchy: React.FC = () => {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [agencyRes, agentRes] = await Promise.all([
+    const [agencyRes, rosterRes] = await Promise.all([
       supabase.from('crm_agencies').select('*').order('name'),
-      supabase.from('agents').select('agency').eq('status', 'completed'),
+      supabase.from('crm_roster_uploads').select('agency, row_count').order('uploaded_at', { ascending: false }),
     ]);
 
     const allAgencies = (agencyRes.data || []).filter(a => !a.is_test);
     setAgencies(allAgencies);
 
     const counts: Record<string, number> = {};
-    for (const agent of (agentRes.data || [])) {
-      counts[agent.agency] = (counts[agent.agency] || 0) + 1;
+    for (const upload of (rosterRes.data || [])) {
+      if (!counts[upload.agency]) {
+        counts[upload.agency] = upload.row_count || 0;
+      }
     }
     setAgentCounts(counts);
 
@@ -303,14 +305,14 @@ const TreeNode: React.FC<{
   ];
 
   return (
-    <div>
+    <div className="relative">
       <div
         className={`group flex items-center gap-3 px-4 py-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
           node.crm_enabled
             ? 'bg-white border-steel-200 hover:border-navy-300'
             : 'bg-steel-50 border-steel-200 hover:border-steel-300'
         }`}
-        style={{ marginLeft: depth * 32 }}
+        style={{ marginLeft: depth * 24 }}
       >
         {hasChildren && (
           <button
@@ -378,8 +380,8 @@ const TreeNode: React.FC<{
       {hasChildren && isExpanded && (
         <div className="mt-1 space-y-1 relative">
           <div
-            className="absolute top-0 bottom-0 border-l-2 border-steel-200"
-            style={{ left: depth * 32 + 28 }}
+            className="absolute top-0 bottom-0 border-l-2 border-steel-200 rounded-bl"
+            style={{ left: depth * 24 + 20 }}
           />
           {node.children.map(child => (
             <TreeNode
