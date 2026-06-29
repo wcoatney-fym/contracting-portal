@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { X, FileText, Users, Monitor } from 'lucide-react';
+import { X, FileText, Users, Monitor, Shield } from 'lucide-react';
 import type { CrmAgency } from '../../lib/supabase';
 import { ContractingOnboardingTab } from './ContractingOnboardingTab';
 import { HierarchyRosterTab } from './HierarchyRosterTab';
 import { CrmToggleTab } from './CrmToggleTab';
+import { CarriersTab } from './CarriersTab';
 
-type Tab = 'onboarding' | 'roster' | 'crm';
+type Tab = 'onboarding' | 'roster' | 'crm' | 'carriers';
 
 interface AgencyDetailPanelProps {
   agency: CrmAgency;
@@ -25,6 +26,7 @@ export const AgencyDetailPanel: React.FC<AgencyDetailPanelProps> = ({
   const tabs: { key: Tab; label: string; icon: React.FC<{ className?: string }> }[] = [
     { key: 'onboarding', label: 'Onboarding', icon: FileText },
     { key: 'roster', label: 'Roster', icon: Users },
+    { key: 'carriers', label: 'Carriers', icon: Shield },
     { key: 'crm', label: 'CRM', icon: Monitor },
   ];
 
@@ -82,6 +84,9 @@ export const AgencyDetailPanel: React.FC<AgencyDetailPanelProps> = ({
           )}
           {activeTab === 'crm' && (
             <CrmToggleTab agency={agency} onAgencyUpdated={onAgencyUpdated} onRefresh={onRefresh} />
+          )}
+          {activeTab === 'carriers' && (
+            <CarriersTab agency={agency} onAgencyUpdated={onAgencyUpdated} />
           )}
         </div>
       </div>

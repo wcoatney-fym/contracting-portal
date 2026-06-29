@@ -137,6 +137,7 @@ export type CrmAgency = {
   principal_agent_npn: string | null;
   contracting_email: string | null;
   contracting_contact: string | null;
+  carriers: string[];
   created_at: string;
   updated_at: string;
 };

@@ -351,6 +351,11 @@ const TreeNode: React.FC<{
                   Incomplete
                 </span>
               )}
+              {(node.carriers || []).map(c => (
+                <span key={c} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700 uppercase tracking-wider">
+                  {c}
+                </span>
+              ))}
             </div>
             <div className="flex items-center gap-3 mt-0.5">
               <span className="text-xs text-steel-500 flex items-center gap-1">
