@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, X, Download, UserPlus, CheckCircle, FileDown, Undo2, UserX, Database, GitBranch } from 'lucide-react';
+import { Eye, X, Download, UserPlus, CheckCircle, FileDown, Undo2, UserX } from 'lucide-react';
 import { supabase, Agent, FormSubmission, UploadedFile, AgentLobAssignment, formatPhoneDisplay } from '../lib/supabase';
 import { LobAssignment } from '../components/LobAssignment';
 import { fireCrmOnboardingWebhook } from '../lib/webhooks';
-import { AgentPipelineBoard } from './agent-database/AgentPipelineBoard';
 
 const MALE_PROFILE_IMAGE = 'https://storage.googleapis.com/msgsndr/YM9XmCanfO6p28b1sQOH/media/6882b3d23303840127a970fb.png';
 const FEMALE_PROFILE_IMAGE = 'https://storage.googleapis.com/msgsndr/YM9XmCanfO6p28b1sQOH/media/6882b3d2f665866357dfd218.png';
 
 export const AgentDatabase: React.FC = () => {
-  const [activeView, setActiveView] = useState<'database' | 'pipeline'>('database');
   const [agents, setAgents] = useState<Agent[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, FormSubmission>>({});
   const [filteredAgents, setFilteredAgents] = useState<Agent[]>([]);
@@ -553,53 +551,21 @@ export const AgentDatabase: React.FC = () => {
 
   return (
     <div className="p-8">
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-navy-600">Agent Database</h1>
           <p className="text-gray-600 mt-1">Complete repository of all contracted agents</p>
         </div>
-        {activeView === 'database' && (
-          <button
-            onClick={handleExportCsv}
-            disabled={filteredAgents.length === 0}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-navy-600 text-white rounded-lg font-medium hover:bg-navy-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm shadow-sm"
-          >
-            <FileDown className="w-4 h-4" />
-            Export CSV
-          </button>
-        )}
-      </div>
-
-      {/* View Toggle */}
-      <div className="flex items-center gap-1 mb-6 p-1 bg-steel-100 rounded-lg w-fit">
         <button
-          onClick={() => setActiveView('database')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-            activeView === 'database'
-              ? 'bg-white text-navy-700 shadow-sm'
-              : 'text-steel-500 hover:text-steel-700'
-          }`}
+          onClick={handleExportCsv}
+          disabled={filteredAgents.length === 0}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-navy-600 text-white rounded-lg font-medium hover:bg-navy-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm shadow-sm"
         >
-          <Database className="w-4 h-4" />
-          Database
-        </button>
-        <button
-          onClick={() => setActiveView('pipeline')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-            activeView === 'pipeline'
-              ? 'bg-white text-navy-700 shadow-sm'
-              : 'text-steel-500 hover:text-steel-700'
-          }`}
-        >
-          <GitBranch className="w-4 h-4" />
-          New Agent Pipeline
+          <FileDown className="w-4 h-4" />
+          Export CSV
         </button>
       </div>
 
-      {activeView === 'pipeline' ? (
-        <AgentPipelineBoard />
-      ) : (
-      <>
       <div className="bg-white rounded-lg shadow p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <input
@@ -1048,8 +1014,6 @@ export const AgentDatabase: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
-      </>
       )}
     </div>
   );
