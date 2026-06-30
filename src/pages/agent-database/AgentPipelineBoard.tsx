@@ -353,8 +353,3 @@ export const AgentPipelineBoard: React.FC = () => {
     </div>
   );
 };
-
-
-export { STAGES }
-
-export { AgentPipelineBoard }
