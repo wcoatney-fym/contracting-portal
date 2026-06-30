@@ -123,7 +123,7 @@ export const CrmToggleTab: React.FC<CrmToggleTabProps> = ({
     { label: 'Agency phone provided', done: !!(agency.agency_phone?.trim()) },
   ];
 
-  const allPrereqsMet = prerequisites.every(p => p.done);
+  const allPrereqsMet = agency.is_test || prerequisites.every(p => p.done);
 
   return (
     <div className="p-6">
