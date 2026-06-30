@@ -207,6 +207,31 @@ export type AgencyDeal = {
   created_at: string;
 };
 
+export type AgentPipelineStage =
+  | 'hip_broker' | 'hip_career' | 'iaa' | 'signed_iaa' | 'bill_com'
+  | 'crm' | 'in_contracting' | 'rts' | 'hip_broker_ready'
+  | 'hip_career_ready' | 'actively_selling' | 'terminated';
+
+export type AgentPipelineRecord = {
+  id: string;
+  ghl_opportunity_id: string;
+  ghl_pipeline_id: string | null;
+  ghl_stage_id: string | null;
+  stage: AgentPipelineStage;
+  agent_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  agency: string | null;
+  agency_id: string | null;
+  writing_numbers: string | null;
+  notes: string | null;
+  stage_entered_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AgencyKpi = {
   id: string;
   agency_id: string;
