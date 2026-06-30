@@ -29,14 +29,21 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Look up agency by GHL location
+    // Look up agency by GHL location (existing per-agency configs)
     const { data: config } = await supabase
       .from("agency_ghl_configs")
       .select("agency_id, crm_agencies(id, name)")
       .eq("ghl_location_id", locationId)
       .maybeSingle();
 
-    if (!config) {
+    // Also check the pipeline-specific config
+    const { data: pipelineConfig } = await supabase
+      .from("agent_pipeline_ghl_config")
+      .select("ghl_location_id")
+      .eq("ghl_location_id", locationId)
+      .maybeSingle();
+
+    if (!config && !pipelineConfig) {
       return new Response(
         JSON.stringify({ success: false, error: "No agency mapped to this location" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -72,7 +79,7 @@ Deno.serve(async (req: Request) => {
     // Look up the internal stage from the mapping table
     const { data: stageMapping } = await supabase
       .from("agent_pipeline_stage_map")
-      .select("internal_stage")
+      .select("internal_stage, ghl_stage_id")
       .eq("ghl_stage_name", stageName)
       .maybeSingle();
 
@@ -86,6 +93,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Auto-learn GHL stage ID from incoming webhook if not already stored
+    const incomingGhlStageId = opportunity.pipelineStageId || opportunity.pipeline_stage_id || null;
+    if (incomingGhlStageId && !stageMapping.ghl_stage_id) {
+      await supabase
+        .from("agent_pipeline_stage_map")
+        .update({ ghl_stage_id: incomingGhlStageId })
+        .eq("ghl_stage_name", stageName);
+    }
+
     // Extract contact info
     const contact = opportunity.contact || {};
     const contactName = contact.name || opportunity.name || "";
@@ -94,22 +110,39 @@ Deno.serve(async (req: Request) => {
     const lastName = nameParts.slice(1).join(" ") || "";
 
     const agencyName =
-      (config.crm_agencies as { id: string; name: string } | null)?.name || null;
-    const agencyId = config.agency_id;
+      config ? (config.crm_agencies as { id: string; name: string } | null)?.name || null : null;
+    const agencyId = config ? config.agency_id : null;
 
-    // Check if the record already exists (for stage change detection)
+    // Check if the record already exists (for loop detection)
     const { data: existing } = await supabase
       .from("agent_pipeline")
-      .select("stage")
+      .select("stage, last_updated_by, ghl_sync_status")
       .eq("ghl_opportunity_id", ghlOpportunityId)
       .maybeSingle();
+
+    // LOOP GUARD: if stage matches, was last updated by UI, and is synced,
+    // this is the echo bounce-back from our own push -- skip it
+    if (
+      existing &&
+      existing.stage === stageMapping.internal_stage &&
+      existing.last_updated_by === "ui" &&
+      existing.ghl_sync_status === "synced"
+    ) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Echo detected (UI push bounce-back), skipping",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const stageChanged = !existing || existing.stage !== stageMapping.internal_stage;
 
     const pipelineData: Record<string, unknown> = {
       ghl_opportunity_id: ghlOpportunityId,
       ghl_pipeline_id: opportunity.pipelineId || opportunity.pipeline_id || null,
-      ghl_stage_id: opportunity.pipelineStageId || opportunity.pipeline_stage_id || null,
+      ghl_stage_id: incomingGhlStageId,
       stage: stageMapping.internal_stage,
       agent_name: contactName,
       first_name: firstName,
@@ -118,6 +151,8 @@ Deno.serve(async (req: Request) => {
       phone: contact.phone || opportunity.phone || null,
       agency: agencyName,
       agency_id: agencyId,
+      last_updated_by: "ghl_webhook",
+      ghl_sync_status: "synced",
       updated_at: new Date().toISOString(),
     };
 

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine, Settings, Wifi, WifiOff, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { AgentPipelineRecord, AgentPipelineStage } from '../../lib/supabase';
+import type { AgentPipelineRecord, AgentPipelineStage, AgentPipelineGhlConfig } from '../../lib/supabase';
 import { AgentPipelineDetailModal } from './AgentPipelineDetailModal';
+import { PipelineGhlSettings } from './PipelineGhlSettings';
 
-const STAGES: { key: AgentPipelineStage; label: string; color: string }[] = [
+export const STAGES: { key: AgentPipelineStage; label: string; color: string }[] = [
   { key: 'hip_broker', label: 'HIP Broker', color: 'bg-blue-50 border-blue-200' },
   { key: 'hip_career', label: 'HIP Career', color: 'bg-indigo-50 border-indigo-200' },
   { key: 'iaa', label: 'IAA', color: 'bg-violet-50 border-violet-200' },
@@ -30,6 +31,24 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(days / 30)}mo`;
 }
 
+async function pushStageChange(recordId: string, newStage: AgentPipelineStage): Promise<{ success: boolean; record?: AgentPipelineRecord; error?: string; ghl_pushed?: boolean }> {
+  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/push-pipeline-stage`;
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ record_id: recordId, new_stage: newStage }),
+  });
+
+  if (!res.ok) {
+    return { success: false, error: `Request failed (${res.status})` };
+  }
+
+  return await res.json();
+}
+
 export const AgentPipelineBoard: React.FC = () => {
   const [records, setRecords] = useState<AgentPipelineRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +56,19 @@ export const AgentPipelineBoard: React.FC = () => {
   const [agencyFilter, setAgencyFilter] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<AgentPipelineRecord | null>(null);
   const [agencies, setAgencies] = useState<string[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [ghlConfig, setGhlConfig] = useState<AgentPipelineGhlConfig | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<AgentPipelineStage | null>(null);
+  const [pushingIds, setPushingIds] = useState<Set<string>>(new Set());
+  const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const toastTimer = useRef<number>();
+
+  const showToast = (text: string, type: 'success' | 'error') => {
+    setToastMsg({ text, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToastMsg(null), 3500);
+  };
 
   const loadData = useCallback(async () => {
     const { data } = await supabase
@@ -53,11 +85,21 @@ export const AgentPipelineBoard: React.FC = () => {
     setLoading(false);
   }, []);
 
+  const loadGhlConfig = useCallback(async () => {
+    const { data } = await supabase
+      .from('agent_pipeline_ghl_config')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    setGhlConfig(data);
+  }, []);
+
   useEffect(() => {
     loadData();
+    loadGhlConfig();
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
-  }, [loadData]);
+  }, [loadData, loadGhlConfig]);
 
   const filtered = records.filter(r => {
     if (search && !r.agent_name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -75,6 +117,63 @@ export const AgentPipelineBoard: React.FC = () => {
   const handleRecordUpdated = (updated: AgentPipelineRecord) => {
     setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
     setSelectedRecord(updated);
+  };
+
+  const handleStageChange = async (recordId: string, newStage: AgentPipelineStage) => {
+    const record = records.find(r => r.id === recordId);
+    if (!record || record.stage === newStage) return;
+
+    setPushingIds(prev => new Set(prev).add(recordId));
+
+    // Optimistic update
+    setRecords(prev => prev.map(r =>
+      r.id === recordId ? { ...r, stage: newStage, stage_entered_at: new Date().toISOString() } : r
+    ));
+
+    const result = await pushStageChange(recordId, newStage);
+
+    if (result.success && result.record) {
+      setRecords(prev => prev.map(r => r.id === recordId ? result.record! : r));
+      if (selectedRecord?.id === recordId) setSelectedRecord(result.record);
+      const stageLabel = STAGES.find(s => s.key === newStage)?.label || newStage;
+      showToast(`Moved to ${stageLabel}${result.ghl_pushed ? ' (synced to GHL)' : ''}`, 'success');
+    } else {
+      // Revert optimistic update
+      setRecords(prev => prev.map(r => r.id === recordId ? record : r));
+      showToast(result.error || 'Failed to move agent', 'error');
+    }
+
+    setPushingIds(prev => { const next = new Set(prev); next.delete(recordId); return next; });
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, recordId: string) => {
+    e.dataTransfer.setData('text/plain', recordId);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggingId(recordId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverStage(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, stageKey: AgentPipelineStage) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverStage(stageKey);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverStage(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, stageKey: AgentPipelineStage) => {
+    e.preventDefault();
+    const recordId = e.dataTransfer.getData('text/plain');
+    setDragOverStage(null);
+    setDraggingId(null);
+    if (recordId) handleStageChange(recordId, stageKey);
   };
 
   if (loading) {
@@ -117,6 +216,31 @@ export const AgentPipelineBoard: React.FC = () => {
           <RefreshCw className="w-4 h-4" />
           Refresh
         </button>
+
+        {/* GHL Connection Status */}
+        <div className="flex items-center gap-2">
+          {ghlConfig?.connection_status === 'connected' ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+              <Wifi className="w-3 h-3" /> GHL Synced
+            </span>
+          ) : ghlConfig?.connection_status === 'error' ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">
+              <WifiOff className="w-3 h-3" /> GHL Error
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-steel-500 bg-steel-50 border border-steel-200 px-2.5 py-1 rounded-full">
+              <WifiOff className="w-3 h-3" /> GHL Off
+            </span>
+          )}
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-2 border border-steel-200 rounded-lg text-steel-500 hover:bg-steel-50 hover:text-steel-700 transition-colors"
+            title="GHL Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+
         <span className="text-sm text-steel-500 ml-auto">
           {totalCount} agent{totalCount !== 1 ? 's' : ''} in pipeline
         </span>
@@ -128,7 +252,12 @@ export const AgentPipelineBoard: React.FC = () => {
           {groupedByStage.map(col => (
             <div
               key={col.key}
-              className={`w-[220px] flex-shrink-0 rounded-xl border ${col.color} flex flex-col`}
+              onDragOver={(e) => handleDragOver(e, col.key)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, col.key)}
+              className={`w-[220px] flex-shrink-0 rounded-xl border ${col.color} flex flex-col transition-all ${
+                dragOverStage === col.key ? 'ring-2 ring-navy-400 ring-offset-1 scale-[1.01]' : ''
+              }`}
             >
               {/* Column Header */}
               <div className="p-3 border-b border-inherit">
@@ -147,10 +276,15 @@ export const AgentPipelineBoard: React.FC = () => {
               {/* Cards */}
               <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[calc(100vh-320px)]">
                 {col.records.map(record => (
-                  <button
+                  <div
                     key={record.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, record.id)}
+                    onDragEnd={handleDragEnd}
                     onClick={() => setSelectedRecord(record)}
-                    className="w-full text-left bg-white rounded-lg border border-steel-200 p-3 shadow-sm hover:shadow-md hover:border-steel-300 transition-all cursor-pointer group"
+                    className={`w-full text-left bg-white rounded-lg border border-steel-200 p-3 shadow-sm hover:shadow-md hover:border-steel-300 transition-all cursor-grab active:cursor-grabbing group ${
+                      draggingId === record.id ? 'opacity-50 scale-95' : ''
+                    } ${pushingIds.has(record.id) ? 'animate-pulse' : ''}`}
                   >
                     <div className="flex items-start gap-2">
                       <User className="w-3.5 h-3.5 text-steel-400 mt-0.5 flex-shrink-0" />
@@ -169,16 +303,18 @@ export const AgentPipelineBoard: React.FC = () => {
                         <Clock className="w-3 h-3 text-steel-400" />
                         <span className="text-[11px] text-steel-400">{timeAgo(record.stage_entered_at)}</span>
                       </div>
-                      {(col.key === 'hip_broker_ready' || col.key === 'hip_career_ready') && record.writing_numbers && (
+                      {pushingIds.has(record.id) ? (
+                        <Loader2 className="w-3 h-3 text-navy-500 animate-spin" />
+                      ) : (col.key === 'hip_broker_ready' || col.key === 'hip_career_ready') && record.writing_numbers ? (
                         <div className="flex items-center gap-1">
                           <PenLine className="w-3 h-3 text-emerald-500" />
                           <span className="text-[10px] text-emerald-600 font-medium truncate max-w-[60px]">
                             {record.writing_numbers}
                           </span>
                         </div>
-                      )}
+                      ) : null}
                     </div>
-                  </button>
+                  </div>
                 ))}
                 {col.records.length === 0 && (
                   <div className="text-center py-6 text-xs text-steel-400">
@@ -191,14 +327,34 @@ export const AgentPipelineBoard: React.FC = () => {
         </div>
       </div>
 
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all animate-in fade-in slide-in-from-bottom-2 ${
+          toastMsg.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          {toastMsg.text}
+        </div>
+      )}
+
       {/* Detail Modal */}
       {selectedRecord && (
         <AgentPipelineDetailModal
           record={selectedRecord}
           onClose={() => setSelectedRecord(null)}
           onRecordUpdated={handleRecordUpdated}
+          onStageChange={handleStageChange}
         />
+      )}
+
+      {/* GHL Settings Modal */}
+      {showSettings && (
+        <PipelineGhlSettings onClose={() => { setShowSettings(false); loadGhlConfig(); }} />
       )}
     </div>
   );
 };
+
+
+export { STAGES }
+
+export { AgentPipelineBoard }

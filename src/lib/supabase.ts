@@ -227,9 +227,31 @@ export type AgentPipelineRecord = {
   agency_id: string | null;
   writing_numbers: string | null;
   notes: string | null;
+  last_updated_by: 'ghl_webhook' | 'ui';
+  ghl_sync_status: 'synced' | 'pending_push' | 'pushing';
   stage_entered_at: string;
   created_at: string;
   updated_at: string;
+};
+
+export type AgentPipelineGhlConfig = {
+  id: string;
+  ghl_api_key: string;
+  ghl_location_id: string;
+  ghl_pipeline_id: string;
+  connection_status: 'disconnected' | 'connected' | 'error';
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgentPipelineStageMap = {
+  id: string;
+  ghl_stage_name: string;
+  internal_stage: AgentPipelineStage;
+  ghl_stage_id: string | null;
+  display_order: number;
+  created_at: string;
 };
 
 export type AgencyKpi = {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, User, Mail, Phone, Building2, Clock, PenLine, StickyNote, Save, Loader2 } from 'lucide-react';
+import { X, User, Mail, Phone, Building2, Clock, PenLine, StickyNote, Save, Loader2, ArrowRightLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { AgentPipelineRecord } from '../../lib/supabase';
+import type { AgentPipelineRecord, AgentPipelineStage } from '../../lib/supabase';
+import { STAGES } from './AgentPipelineBoard';
 
 const STAGE_LABELS: Record<string, string> = {
   hip_broker: 'HIP Broker',
@@ -22,17 +23,21 @@ interface AgentPipelineDetailModalProps {
   record: AgentPipelineRecord;
   onClose: () => void;
   onRecordUpdated: (updated: AgentPipelineRecord) => void;
+  onStageChange: (recordId: string, newStage: AgentPipelineStage) => Promise<void>;
 }
 
 export const AgentPipelineDetailModal: React.FC<AgentPipelineDetailModalProps> = ({
   record,
   onClose,
   onRecordUpdated,
+  onStageChange,
 }) => {
   const [writingNumbers, setWritingNumbers] = useState(record.writing_numbers || '');
   const [notes, setNotes] = useState(record.notes || '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [movingStage, setMovingStage] = useState(false);
+  const [pendingStage, setPendingStage] = useState<AgentPipelineStage>(record.stage);
 
   const isReadyStage = record.stage === 'hip_broker_ready' || record.stage === 'hip_career_ready';
   const hasChanges =
@@ -60,6 +65,14 @@ export const AgentPipelineDetailModal: React.FC<AgentPipelineDetailModalProps> =
       setTimeout(() => setSaved(false), 2000);
     }
     setSaving(false);
+  };
+
+  const handleStageSelect = async (newStage: AgentPipelineStage) => {
+    if (newStage === record.stage) return;
+    setPendingStage(newStage);
+    setMovingStage(true);
+    await onStageChange(record.id, newStage);
+    setMovingStage(false);
   };
 
   const stageEnteredDate = new Date(record.stage_entered_at).toLocaleDateString('en-US', {
@@ -98,6 +111,33 @@ export const AgentPipelineDetailModal: React.FC<AgentPipelineDetailModalProps> =
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Move Stage */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-steel-500">
+              <ArrowRightLeft className="w-3.5 h-3.5" />
+              Move to Stage
+            </label>
+            <div className="relative">
+              <select
+                value={pendingStage}
+                onChange={(e) => handleStageSelect(e.target.value as AgentPipelineStage)}
+                disabled={movingStage}
+                className="w-full px-4 py-2.5 border border-steel-200 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent appearance-none bg-white disabled:opacity-50"
+              >
+                {STAGES.map(s => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}{s.key === record.stage ? ' (current)' : ''}
+                  </option>
+                ))}
+              </select>
+              {movingStage && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="w-4 h-4 animate-spin text-navy-600" />
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Contact Info */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-steel-500">Contact Information</h3>
