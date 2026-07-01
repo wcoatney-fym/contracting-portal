@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine, Settings, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine, Settings, Wifi, WifiOff, Loader2, Download } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { AgentPipelineRecord, AgentPipelineStage, AgentPipelineGhlConfig } from '../../lib/supabase';
 import { AgentPipelineDetailModal } from './AgentPipelineDetailModal';
@@ -62,6 +62,7 @@ export const AgentPipelineBoard: React.FC = () => {
   const [dragOverStage, setDragOverStage] = useState<AgentPipelineStage | null>(null);
   const [pushingIds, setPushingIds] = useState<Set<string>>(new Set());
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const toastTimer = useRef<number>();
 
   const showToast = (text: string, type: 'success' | 'error') => {
@@ -100,6 +101,31 @@ export const AgentPipelineBoard: React.FC = () => {
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, [loadData, loadGhlConfig]);
+
+  const handleSyncFromGhl = async () => {
+    setSyncing(true);
+    try {
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-pipeline-from-ghl`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const result = await res.json();
+      if (result.success) {
+        showToast(result.message || `Synced ${result.synced} agents from GHL`, 'success');
+        await loadData();
+      } else {
+        showToast(result.error || 'Sync failed', 'error');
+      }
+    } catch (err) {
+      showToast('Network error during sync', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const filtered = records.filter(r => {
     if (search && !r.agent_name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -232,6 +258,15 @@ export const AgentPipelineBoard: React.FC = () => {
               <WifiOff className="w-3 h-3" /> GHL Off
             </span>
           )}
+          <button
+            onClick={handleSyncFromGhl}
+            disabled={syncing || !ghlConfig?.ghl_pipeline_id}
+            className="flex items-center gap-1.5 px-3 py-2 border border-steel-200 rounded-lg text-sm text-steel-600 hover:bg-steel-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Pull all opportunities from GHL"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Sync from GHL
+          </button>
           <button
             onClick={() => setShowSettings(true)}
             className="p-2 border border-steel-200 rounded-lg text-steel-500 hover:bg-steel-50 hover:text-steel-700 transition-colors"
