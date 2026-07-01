@@ -22,6 +22,7 @@ Deno.serve(async (req: Request) => {
       firstName: body.firstName,
       lastName: body.lastName,
       npn: body.npn,
+      agency: body.agency || "",
       unlWritingNumber: body.unlWritingNumber || "",
       gtlWritingNumber: body.gtlWritingNumber || "",
     };

@@ -99,6 +99,7 @@ interface HipWritingWebhookData {
   firstName: string;
   lastName: string;
   npn: string;
+  agency: string;
   unlWritingNumber: string;
   gtlWritingNumber: string;
 }
