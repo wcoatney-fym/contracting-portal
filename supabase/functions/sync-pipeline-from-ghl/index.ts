@@ -23,6 +23,7 @@ interface GhlOpportunity {
   pipelineId?: string;
   pipelineStageId?: string;
   status?: string;
+  contactId?: string;
   contact?: {
     id?: string;
     name?: string;
@@ -34,6 +35,61 @@ interface GhlOpportunity {
   assignedTo?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+interface GhlCustomField {
+  id?: string;
+  key?: string;
+  name?: string;
+  value?: unknown;
+  fieldValue?: unknown;
+}
+
+interface GhlContact {
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  companyName?: string;
+  tags?: string[];
+  customFields?: GhlCustomField[];
+}
+
+// Fetch full contact detail (tags + intake custom fields) that the
+// opportunities/search endpoint does not return.
+async function fetchContact(
+  contactId: string,
+  headers: Record<string, string>,
+): Promise<GhlContact | null> {
+  try {
+    const res = await fetch(`${GHL_BASE}/contacts/${contactId}`, { headers });
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get("retry-after") || "3", 10);
+      await sleep(retryAfter * 1000);
+      const retry = await fetch(`${GHL_BASE}/contacts/${contactId}`, { headers });
+      if (!retry.ok) return null;
+      const rj = await retry.json();
+      return rj.contact || rj || null;
+    }
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.contact || data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Normalize GHL customFields (array of {id/key/name, value}) into a flat map.
+function mapCustomFields(fields: GhlCustomField[] | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const f of fields || []) {
+    const key = f.name || f.key || f.id;
+    if (!key) continue;
+    out[key] = f.value ?? f.fieldValue ?? null;
+  }
+  return out;
 }
 
 Deno.serve(async (req: Request) => {
@@ -158,6 +214,16 @@ Deno.serve(async (req: Request) => {
     let skipped = 0;
     const errors: string[] = [];
 
+    // Pre-load existing records so we only reset stage_entered_at on real
+    // stage changes (a blanket now() reset destroys time-in-stage).
+    const { data: existingRows } = await supabase
+      .from("agent_pipeline")
+      .select("ghl_opportunity_id, stage");
+    const existingByOppId: Record<string, string> = {};
+    for (const row of existingRows || []) {
+      existingByOppId[row.ghl_opportunity_id] = row.stage;
+    }
+
     for (const opp of allOpportunities) {
       const ghlStageId = opp.pipelineStageId || null;
       const internalStage = ghlStageId ? stageIdToInternal[ghlStageId] : null;
@@ -167,29 +233,48 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const contact = opp.contact || {};
-      const contactName = contact.name || opp.name || "";
-      const nameParts = contactName.split(" ");
-      const firstName = contact.firstName || nameParts[0] || "";
-      const lastName = contact.lastName || nameParts.slice(1).join(" ") || "";
+      const oppContact = opp.contact || {};
+      const contactId = oppContact.id || opp.contactId || null;
 
-      const pipelineData = {
+      // Enrich with full contact detail (tags + intake custom fields) that
+      // opportunities/search omits.
+      const detail = contactId ? await fetchContact(contactId, headers) : null;
+
+      const contactName = detail?.name || oppContact.name || opp.name || "";
+      const nameParts = contactName.split(" ");
+      const firstName = detail?.firstName || oppContact.firstName || nameParts[0] || "";
+      const lastName = detail?.lastName || oppContact.lastName || nameParts.slice(1).join(" ") || "";
+      const tags = detail?.tags || [];
+      const customFields = mapCustomFields(detail?.customFields);
+
+      const prevStage = existingByOppId[opp.id];
+      const stageChanged = prevStage === undefined || prevStage !== internalStage;
+
+      const pipelineData: Record<string, unknown> = {
         ghl_opportunity_id: opp.id,
+        ghl_contact_id: contactId,
         ghl_pipeline_id: opp.pipelineId || ghl_pipeline_id,
         ghl_stage_id: ghlStageId,
         stage: internalStage,
         agent_name: contactName || `${firstName} ${lastName}`.trim(),
         first_name: firstName,
         last_name: lastName,
-        email: contact.email || null,
-        phone: contact.phone || null,
+        email: detail?.email || oppContact.email || null,
+        phone: detail?.phone || oppContact.phone || null,
         agency: agencyName,
         agency_id: agencyId,
-        last_updated_by: "ghl_sync",
+        tags,
+        custom_fields: customFields,
+        last_updated_by: "ghl_webhook",
         ghl_sync_status: "synced",
         updated_at: new Date().toISOString(),
-        stage_entered_at: new Date().toISOString(),
       };
+
+      // Only stamp stage_entered_at when the agent actually changed stage,
+      // so time-in-stage survives repeated syncs.
+      if (stageChanged) {
+        pipelineData.stage_entered_at = new Date().toISOString();
+      }
 
       const { error: upsertErr } = await supabase
         .from("agent_pipeline")
@@ -200,6 +285,9 @@ Deno.serve(async (req: Request) => {
       } else {
         synced++;
       }
+
+      // Gentle pacing so per-contact enrichment doesn't trip rate limits.
+      if (contactId) await sleep(PAGE_DELAY_MS);
     }
 
     // Update connection status

@@ -215,6 +215,7 @@ export type AgentPipelineStage =
 export type AgentPipelineRecord = {
   id: string;
   ghl_opportunity_id: string;
+  ghl_contact_id: string | null;
   ghl_pipeline_id: string | null;
   ghl_stage_id: string | null;
   stage: AgentPipelineStage;
@@ -227,6 +228,8 @@ export type AgentPipelineRecord = {
   agency_id: string | null;
   writing_numbers: string | null;
   notes: string | null;
+  tags: string[];
+  custom_fields: Record<string, unknown>;
   last_updated_by: 'ghl_webhook' | 'ui';
   ghl_sync_status: 'synced' | 'pending_push' | 'pushing';
   stage_entered_at: string;

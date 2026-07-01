@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Mail, Phone, Building2, Clock, PenLine, StickyNote, Save, Loader2, ArrowRightLeft } from 'lucide-react';
+import { X, User, Mail, Phone, Building2, Clock, PenLine, StickyNote, Save, Loader2, ArrowRightLeft, Tag, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { AgentPipelineRecord, AgentPipelineStage } from '../../lib/supabase';
 import { STAGES } from './AgentPipelineBoard';
@@ -137,6 +137,43 @@ export const AgentPipelineDetailModal: React.FC<AgentPipelineDetailModalProps> =
               )}
             </div>
           </div>
+
+          {/* Tags */}
+          {record.tags && record.tags.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-steel-500">
+                <Tag className="w-3.5 h-3.5" /> Tags
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {record.tags.map(tag => (
+                  <span key={tag} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-navy-50 text-navy-700 border border-navy-100">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Intake Form / Custom Fields */}
+          {record.custom_fields && Object.keys(record.custom_fields).length > 0 && (
+            <div className="space-y-2">
+              <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-steel-500">
+                <FileText className="w-3.5 h-3.5" /> Intake Information
+              </h3>
+              <div className="grid grid-cols-1 gap-2">
+                {Object.entries(record.custom_fields)
+                  .filter(([, v]) => v !== null && v !== '' && v !== undefined)
+                  .map(([key, value]) => (
+                    <div key={key} className="flex items-start justify-between gap-3 p-3 bg-steel-50 rounded-lg">
+                      <span className="text-xs font-medium text-steel-500">{key}</span>
+                      <span className="text-sm text-steel-800 text-right break-words">
+                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* Contact Info */}
           <div className="space-y-3">
