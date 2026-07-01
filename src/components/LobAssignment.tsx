@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Save, AlertCircle, CheckCircle, Briefcase, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase, AgentLobAssignment, HIP_CARRIERS } from '../lib/supabase';
 import { fireHipWritingWebhook } from '../lib/webhooks';
-import { addAgentToRoster } from '../lib/roster';
 
 interface CarrierState {
   selected: boolean;
@@ -30,7 +29,6 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState(false);
   const [npnWarning, setNpnWarning] = useState(false);
-  const [rosterNote, setRosterNote] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
 
   const loadAssignments = useCallback(async () => {
@@ -73,51 +71,9 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
     return errs;
   };
 
-  const syncAgentToRoster = async (resolvedNpn: string) => {
-    try {
-      const { data: agent } = await supabase
-        .from('agents')
-        .select('email, phone, agency')
-        .eq('id', agentId)
-        .maybeSingle();
-
-      if (!agent?.agency) {
-        setRosterNote('Writing number saved, but the agent has no assigned agency, so no HIP-portal roster seat was created.');
-        return;
-      }
-
-      const { data: sub } = await supabase
-        .from('form_submissions')
-        .select('gender')
-        .eq('agent_id', agentId)
-        .maybeSingle();
-
-      const result = await addAgentToRoster({
-        agencyName: agent.agency,
-        firstName: agentFirstName,
-        lastName: agentLastName,
-        email: agent.email || '',
-        phone: agent.phone || '',
-        npn: resolvedNpn,
-        gender: sub?.gender || '',
-      });
-
-      if (result.status === 'added') {
-        setRosterNote(`Added to the ${agent.agency} HIP-portal roster (seat ${result.seatNumber}).`);
-      } else if (result.status === 'already_on_roster') {
-        setRosterNote(`Already on the ${agent.agency} HIP-portal roster (seat ${result.seatNumber}).`);
-      } else {
-        setRosterNote(`Writing number saved, but the HIP-portal roster seat was skipped: ${result.reason}`);
-      }
-    } catch {
-      setRosterNote('Writing number saved, but adding the agent to the HIP-portal roster failed. Please retry or add them via the HIP portal.');
-    }
-  };
-
   const handleSave = async () => {
     setSuccess(false);
     setNpnWarning(false);
-    setRosterNote(null);
     const validationErrors = validate();
     setErrors(validationErrors);
     if (validationErrors.length > 0) return;
@@ -176,17 +132,23 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
             if (!resolvedNpn) {
               setNpnWarning(true);
             } else {
+              // Include the agent's assigned agency so the downstream zap ->
+              // agent-webhook can link the agent to the right agency in the HIP
+              // portal directory (without it, agents land unlinked to any agency).
+              const { data: agent } = await supabase
+                .from('agents')
+                .select('agency')
+                .eq('id', agentId)
+                .maybeSingle();
+
               fireHipWritingWebhook({
                 firstName: agentFirstName,
                 lastName: agentLastName,
                 npn: resolvedNpn,
+                agency: agent?.agency || '',
                 unlWritingNumber: carriers['UNL']?.selected ? carriers['UNL'].writingNumber.trim() : '',
                 gtlWritingNumber: carriers['GTL']?.selected ? carriers['GTL'].writingNumber.trim() : '',
               });
-
-              // A writing number on any carrier means the agent is now writing HIP,
-              // so seat them on their agency's HIP-portal roster if they aren't already.
-              await syncAgentToRoster(resolvedNpn);
             }
           }
         }
@@ -337,12 +299,6 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
             </div>
           )}
 
-          {rosterNote && (
-            <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-blue-700">{rosterNote}</p>
-            </div>
-          )}
 
           <button
             type="button"
