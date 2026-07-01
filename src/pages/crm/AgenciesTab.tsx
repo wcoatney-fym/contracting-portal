@@ -40,10 +40,6 @@ export const AgenciesTab: React.FC = () => {
     return agencies.find((a) => a.id === agency.parent_agency_id)?.name || null;
   };
 
-  const getChildAgencies = (agencyId: string): CrmAgency[] => {
-    return agencies.filter((a) => a.parent_agency_id === agencyId);
-  };
-
   const loadAgencies = async () => {
     setLoading(true);
     const [agencyRes, uploadsRes] = await Promise.all([

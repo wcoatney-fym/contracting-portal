@@ -133,7 +133,7 @@ export const AgencyOnboardingView: React.FC<AgencyOnboardingViewProps> = ({
       <StepperBar agency={agency} currentIdx={currentIdx} />
 
       {isTest && (
-        <TestStepControls agency={agency} currentIdx={currentIdx} onRefresh={refreshAgency} />
+        <TestStepControls agency={agency} onRefresh={refreshAgency} />
       )}
 
       {agency.onboarding_status === 'onboarding_complete' ? (
@@ -332,11 +332,12 @@ const STATUS_LABELS: Record<string, string> = {
 
 const TestStepControls: React.FC<{
   agency: CrmAgency;
-  currentIdx: number;
   onRefresh: () => void;
-}> = ({ agency, currentIdx, onRefresh }) => {
+}> = ({ agency, onRefresh }) => {
   const [moving, setMoving] = useState(false);
-  const statusIdx = ONBOARDING_STATUSES.indexOf(agency.onboarding_status);
+  const statusIdx = ONBOARDING_STATUSES.indexOf(
+    agency.onboarding_status as typeof ONBOARDING_STATUSES[number]
+  );
 
   const moveToStatus = async (newStatus: string) => {
     setMoving(true);

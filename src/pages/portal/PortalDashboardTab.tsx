@@ -34,7 +34,7 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export const PortalDashboardTab: React.FC<PortalDashboardTabProps> = ({ agency, agencyIds }) => {
+export const PortalDashboardTab: React.FC<PortalDashboardTabProps> = ({ agencyIds }) => {
   const [kpi, setKpi] = useState<AgencyKpi | null>(null);
   const [clients, setClients] = useState<AgencyClient[]>([]);
   const [topAgents, setTopAgents] = useState<{ name: string; policies: number; trend: number }[]>([]);

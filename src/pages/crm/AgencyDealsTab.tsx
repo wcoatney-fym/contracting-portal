@@ -45,7 +45,6 @@ export const AgencyDealsTab: React.FC<AgencyDealsTabProps> = ({ agencyId, deals,
 
   const wonDeals = deals.filter((d) => d.status === 'won');
   const lostDeals = deals.filter((d) => d.status === 'lost');
-  const openDeals = deals.filter((d) => d.status === 'open');
   const totalRevenue = wonDeals.reduce((s, d) => s + (d.value || 0), 0);
   const winRate = wonDeals.length + lostDeals.length > 0
     ? Math.round((wonDeals.length / (wonDeals.length + lostDeals.length)) * 100)
