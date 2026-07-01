@@ -272,7 +272,7 @@ export const PipelineGhlSettings: React.FC<PipelineGhlSettingsProps> = ({ onClos
             <div className="flex items-center gap-3">
               <button
                 onClick={handleTestConnection}
-                disabled={testing || !apiKey || !locationId}
+                disabled={testing || !apiKey.trim() || !locationId.trim() || !pipelineId.trim()}
                 className="flex items-center gap-2 px-4 py-2 border border-steel-200 rounded-lg text-sm font-medium text-steel-700 hover:bg-steel-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
@@ -325,7 +325,7 @@ export const PipelineGhlSettings: React.FC<PipelineGhlSettingsProps> = ({ onClos
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !apiKey.trim() || !locationId.trim() || !pipelineId.trim()}
               className="flex items-center gap-2 px-4 py-2.5 bg-navy-600 text-white rounded-lg font-medium text-sm hover:bg-navy-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
