@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, User, Mail, Phone, Building2, Clock, PenLine, StickyNote, Save, Loader2, ArrowRightLeft, Tag, FileText } from 'lucide-react';
+import { X, User, Mail, Phone, Building2, Clock, PenLine, StickyNote, Save, Loader2, ArrowRightLeft, Tag, FileText, ListChecks, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { AgentPipelineRecord, AgentPipelineStage } from '../../lib/supabase';
+import type { AgentPipelineRecord, AgentPipelineStage, AgentPipelineStageStep } from '../../lib/supabase';
 import { STAGES } from './AgentPipelineBoard';
+import { computeProgress } from './pipelineProgress';
 
 const STAGE_LABELS: Record<string, string> = {
   hip_broker: 'HIP Broker',
@@ -21,6 +22,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 interface AgentPipelineDetailModalProps {
   record: AgentPipelineRecord;
+  stageSteps: AgentPipelineStageStep[];
   onClose: () => void;
   onRecordUpdated: (updated: AgentPipelineRecord) => void;
   onStageChange: (recordId: string, newStage: AgentPipelineStage) => Promise<void>;
@@ -28,10 +30,32 @@ interface AgentPipelineDetailModalProps {
 
 export const AgentPipelineDetailModal: React.FC<AgentPipelineDetailModalProps> = ({
   record,
+  stageSteps,
   onClose,
   onRecordUpdated,
   onStageChange,
 }) => {
+  const [togglingStep, setTogglingStep] = useState<string | null>(null);
+  const progress = computeProgress(record, stageSteps);
+
+  const toggleStep = async (stepId: string) => {
+    setTogglingStep(stepId);
+    const current = { ...(record.completed_steps || {}) };
+    if (current[stepId]) {
+      delete current[stepId];
+    } else {
+      current[stepId] = new Date().toISOString();
+    }
+    const { error } = await supabase
+      .from('agent_pipeline')
+      .update({ completed_steps: current, updated_at: new Date().toISOString() })
+      .eq('id', record.id);
+    if (!error) {
+      onRecordUpdated({ ...record, completed_steps: current });
+    }
+    setTogglingStep(null);
+  };
+
   const [writingNumbers, setWritingNumbers] = useState(record.writing_numbers || '');
   const [notes, setNotes] = useState(record.notes || '');
   const [saving, setSaving] = useState(false);
@@ -137,6 +161,59 @@ export const AgentPipelineDetailModal: React.FC<AgentPipelineDetailModalProps> =
               )}
             </div>
           </div>
+
+          {/* Step Checklist */}
+          {progress.total > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-steel-500">
+                  <ListChecks className="w-3.5 h-3.5" /> Steps
+                </h3>
+                <span className={`text-xs font-semibold ${progress.allComplete ? 'text-emerald-600' : 'text-steel-500'}`}>
+                  {progress.completedCount}/{progress.total} complete
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-steel-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${progress.allComplete ? 'bg-emerald-500' : 'bg-navy-500'}`}
+                  style={{ width: `${Math.round(progress.fraction * 100)}%` }}
+                />
+              </div>
+              <div className="space-y-1.5 pt-1">
+                {progress.steps.map(step => {
+                  const doneAt = record.completed_steps?.[step.id];
+                  return (
+                    <button
+                      key={step.id}
+                      onClick={() => toggleStep(step.id)}
+                      disabled={togglingStep === step.id}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-lg border text-left transition-colors ${
+                        doneAt ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-steel-200 hover:bg-steel-50'
+                      }`}
+                    >
+                      <span className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 border ${
+                        doneAt ? 'bg-emerald-500 border-emerald-500' : 'border-steel-300'
+                      }`}>
+                        {togglingStep === step.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-steel-400" />
+                        ) : doneAt ? (
+                          <Check className="w-3.5 h-3.5 text-white" />
+                        ) : null}
+                      </span>
+                      <span className={`text-sm flex-1 ${doneAt ? 'text-steel-700' : 'text-steel-800'}`}>
+                        {step.label}
+                      </span>
+                      {doneAt && (
+                        <span className="text-[10px] text-steel-400 flex-shrink-0">
+                          {new Date(doneAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Tags */}
           {record.tags && record.tags.length > 0 && (

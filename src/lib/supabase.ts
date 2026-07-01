@@ -230,6 +230,7 @@ export type AgentPipelineRecord = {
   notes: string | null;
   tags: string[];
   custom_fields: Record<string, unknown>;
+  completed_steps: Record<string, string>;
   last_updated_by: 'ghl_webhook' | 'ui';
   ghl_sync_status: 'synced' | 'pending_push' | 'pushing';
   stage_entered_at: string;
@@ -246,6 +247,15 @@ export type AgentPipelineGhlConfig = {
   last_error: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type AgentPipelineStageStep = {
+  id: string;
+  internal_stage: AgentPipelineStage;
+  label: string;
+  display_order: number;
+  active: boolean;
+  created_at: string;
 };
 
 export type AgentPipelineStageMap = {
