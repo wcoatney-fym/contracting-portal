@@ -28,6 +28,7 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState(false);
+  const [npnWarning, setNpnWarning] = useState(false);
   const [expanded, setExpanded] = useState(true);
 
   const loadAssignments = useCallback(async () => {
@@ -72,6 +73,7 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
 
   const handleSave = async () => {
     setSuccess(false);
+    setNpnWarning(false);
     const validationErrors = validate();
     setErrors(validationErrors);
     if (validationErrors.length > 0) return;
@@ -113,13 +115,31 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
           );
 
           if (hasChange || previousData.size === 0) {
-            fireHipWritingWebhook({
-              firstName: agentFirstName,
-              lastName: agentLastName,
-              npn: agentNpn,
-              unlWritingNumber: carriers['UNL']?.selected ? carriers['UNL'].writingNumber.trim() : '',
-              gtlWritingNumber: carriers['GTL']?.selected ? carriers['GTL'].writingNumber.trim() : '',
-            });
+            // The zap matches the agent in the activity tracker / HIP portal by NPN.
+            // The passed-in prop can be empty if the agent's form_submission row
+            // isn't loaded, which previously fired an unmatched (silent) payload.
+            // Resolve NPN from the DB before firing, and refuse to fire without it.
+            let resolvedNpn = agentNpn.trim();
+            if (!resolvedNpn) {
+              const { data: sub } = await supabase
+                .from('form_submissions')
+                .select('npn')
+                .eq('agent_id', agentId)
+                .maybeSingle();
+              resolvedNpn = (sub?.npn || '').trim();
+            }
+
+            if (!resolvedNpn) {
+              setNpnWarning(true);
+            } else {
+              fireHipWritingWebhook({
+                firstName: agentFirstName,
+                lastName: agentLastName,
+                npn: resolvedNpn,
+                unlWritingNumber: carriers['UNL']?.selected ? carriers['UNL'].writingNumber.trim() : '',
+                gtlWritingNumber: carriers['GTL']?.selected ? carriers['GTL'].writingNumber.trim() : '',
+              });
+            }
           }
         }
       }
@@ -256,6 +276,16 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
             <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
               <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
               <p className="text-sm text-emerald-700 font-medium">Lines of business saved.</p>
+            </div>
+          )}
+
+          {npnWarning && (
+            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-amber-700">
+                Saved, but the HIP writing-number sync was skipped: no NPN on file for this agent.
+                Add the agent&apos;s NPN, then re-save to trigger the sync.
+              </p>
             </div>
           )}
 
