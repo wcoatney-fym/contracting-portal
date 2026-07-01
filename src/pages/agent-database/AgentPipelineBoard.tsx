@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine, Settings, Wifi, WifiOff, Loader2, Download } from 'lucide-react';
+import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine, Settings, Wifi, WifiOff, Loader2, Download, CheckCircle2, ArrowRight, ListChecks } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { AgentPipelineRecord, AgentPipelineStage, AgentPipelineGhlConfig } from '../../lib/supabase';
+import type { AgentPipelineRecord, AgentPipelineStage, AgentPipelineGhlConfig, AgentPipelineStageStep } from '../../lib/supabase';
 import { AgentPipelineDetailModal } from './AgentPipelineDetailModal';
 import { PipelineGhlSettings } from './PipelineGhlSettings';
+import { ProgressRing } from './ProgressRing';
+import { StageStepsEditor } from './StageStepsEditor';
+import { computeProgress, stageHealth } from './pipelineProgress';
+
+const HEALTH_BORDER: Record<string, string> = {
+  fresh: 'border-steel-200',
+  aging: 'border-amber-300',
+  stalled: 'border-red-300',
+};
 
 export const STAGES: { key: AgentPipelineStage; label: string; color: string }[] = [
   { key: 'hip_broker', label: 'HIP Broker', color: 'bg-blue-50 border-blue-200' },
@@ -57,7 +66,9 @@ export const AgentPipelineBoard: React.FC = () => {
   const [selectedRecord, setSelectedRecord] = useState<AgentPipelineRecord | null>(null);
   const [agencies, setAgencies] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [showStepsEditor, setShowStepsEditor] = useState(false);
   const [ghlConfig, setGhlConfig] = useState<AgentPipelineGhlConfig | null>(null);
+  const [stageSteps, setStageSteps] = useState<AgentPipelineStageStep[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<AgentPipelineStage | null>(null);
   const [pushingIds, setPushingIds] = useState<Set<string>>(new Set());
@@ -86,6 +97,14 @@ export const AgentPipelineBoard: React.FC = () => {
     setLoading(false);
   }, []);
 
+  const loadStageSteps = useCallback(async () => {
+    const { data } = await supabase
+      .from('agent_pipeline_stage_steps')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (data) setStageSteps(data);
+  }, []);
+
   const loadGhlConfig = useCallback(async () => {
     const { data } = await supabase
       .from('agent_pipeline_ghl_config')
@@ -98,9 +117,10 @@ export const AgentPipelineBoard: React.FC = () => {
   useEffect(() => {
     loadData();
     loadGhlConfig();
+    loadStageSteps();
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
-  }, [loadData, loadGhlConfig]);
+  }, [loadData, loadGhlConfig, loadStageSteps]);
 
   const handleSyncFromGhl = async () => {
     setSyncing(true);
@@ -133,10 +153,11 @@ export const AgentPipelineBoard: React.FC = () => {
     return true;
   });
 
-  const groupedByStage = STAGES.map(stage => ({
-    ...stage,
-    records: filtered.filter(r => r.stage === stage.key),
-  }));
+  const groupedByStage = STAGES.map(stage => {
+    const stageRecords = filtered.filter(r => r.stage === stage.key);
+    const readyCount = stageRecords.filter(r => computeProgress(r, stageSteps).allComplete).length;
+    return { ...stage, records: stageRecords, readyCount };
+  });
 
   const totalCount = filtered.length;
 
@@ -268,6 +289,14 @@ export const AgentPipelineBoard: React.FC = () => {
             Sync from GHL
           </button>
           <button
+            onClick={() => setShowStepsEditor(true)}
+            className="flex items-center gap-1.5 px-3 py-2 border border-steel-200 rounded-lg text-sm text-steel-600 hover:bg-steel-50 transition-colors"
+            title="Edit stage step checklists"
+          >
+            <ListChecks className="w-4 h-4" />
+            Steps
+          </button>
+          <button
             onClick={() => setShowSettings(true)}
             className="p-2 border border-steel-200 rounded-lg text-steel-500 hover:bg-steel-50 hover:text-steel-700 transition-colors"
             title="GHL Settings"
@@ -306,27 +335,55 @@ export const AgentPipelineBoard: React.FC = () => {
                     {col.records.length}
                   </span>
                 </div>
+                {col.readyCount > 0 && (
+                  <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700">
+                    <CheckCircle2 className="w-3 h-3" /> {col.readyCount} ready to advance
+                  </div>
+                )}
               </div>
 
               {/* Cards */}
               <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[calc(100vh-320px)]">
-                {col.records.map(record => (
+                {col.records.map(record => {
+                  const progress = computeProgress(record, stageSteps);
+                  const health = stageHealth(record);
+                  return (
                   <div
                     key={record.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, record.id)}
                     onDragEnd={handleDragEnd}
                     onClick={() => setSelectedRecord(record)}
-                    className={`w-full text-left bg-white rounded-lg border border-steel-200 p-3 shadow-sm hover:shadow-md hover:border-steel-300 transition-all cursor-grab active:cursor-grabbing group ${
-                      draggingId === record.id ? 'opacity-50 scale-95' : ''
-                    } ${pushingIds.has(record.id) ? 'animate-pulse' : ''}`}
+                    className={`w-full text-left bg-white rounded-lg border p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
+                      progress.allComplete ? 'border-emerald-300 ring-1 ring-emerald-200 shadow-emerald-100' : HEALTH_BORDER[health]
+                    } ${draggingId === record.id ? 'opacity-50 scale-95' : ''} ${pushingIds.has(record.id) ? 'animate-pulse' : ''}`}
                   >
                     <div className="flex items-start gap-2">
                       <User className="w-3.5 h-3.5 text-steel-400 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm font-semibold text-steel-800 line-clamp-2 leading-tight">
+                      <span className="text-sm font-semibold text-steel-800 line-clamp-2 leading-tight flex-1">
                         {record.agent_name || 'Unnamed'}
                       </span>
+                      {progress.total > 0 && (
+                        <ProgressRing
+                          fraction={progress.fraction}
+                          completed={progress.completedCount}
+                          total={progress.total}
+                          complete={progress.allComplete}
+                        />
+                      )}
                     </div>
+                    {progress.total > 0 && (
+                      progress.allComplete ? (
+                        <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5">
+                          <CheckCircle2 className="w-3 h-3" /> Ready to advance
+                        </div>
+                      ) : progress.nextStep ? (
+                        <div className="mt-2 flex items-center gap-1 text-[11px] text-steel-600">
+                          <ArrowRight className="w-3 h-3 text-navy-400 flex-shrink-0" />
+                          <span className="truncate">Next: {progress.nextStep.label}</span>
+                        </div>
+                      ) : null
+                    )}
                     {record.agency && (
                       <div className="flex items-center gap-1.5 mt-2">
                         <Building2 className="w-3 h-3 text-steel-400" />
@@ -362,7 +419,8 @@ export const AgentPipelineBoard: React.FC = () => {
                       ) : null}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {col.records.length === 0 && (
                   <div className="text-center py-6 text-xs text-steel-400">
                     No agents
@@ -387,6 +445,7 @@ export const AgentPipelineBoard: React.FC = () => {
       {selectedRecord && (
         <AgentPipelineDetailModal
           record={selectedRecord}
+          stageSteps={stageSteps}
           onClose={() => setSelectedRecord(null)}
           onRecordUpdated={handleRecordUpdated}
           onStageChange={handleStageChange}
@@ -396,6 +455,11 @@ export const AgentPipelineBoard: React.FC = () => {
       {/* GHL Settings Modal */}
       {showSettings && (
         <PipelineGhlSettings onClose={() => { setShowSettings(false); loadGhlConfig(); }} />
+      )}
+
+      {/* Stage Steps Editor */}
+      {showStepsEditor && (
+        <StageStepsEditor onClose={() => { setShowStepsEditor(false); loadStageSteps(); }} />
       )}
     </div>
   );
