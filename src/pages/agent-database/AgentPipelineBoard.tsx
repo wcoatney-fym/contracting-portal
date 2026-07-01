@@ -333,6 +333,18 @@ export const AgentPipelineBoard: React.FC = () => {
                         <span className="text-[11px] text-steel-500 truncate">{record.agency}</span>
                       </div>
                     )}
+                    {record.tags && record.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {record.tags.slice(0, 3).map(tag => (
+                          <span key={tag} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-navy-50 text-navy-600 border border-navy-100 truncate max-w-[90px]">
+                            {tag}
+                          </span>
+                        ))}
+                        {record.tags.length > 3 && (
+                          <span className="text-[10px] text-steel-400">+{record.tags.length - 3}</span>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center gap-1">
                         <Clock className="w-3 h-3 text-steel-400" />
