@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, CheckCircle2, Clock, AlertTriangle, UserX } from 'lucide-react';
+import { Users, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { Agent } from '../../lib/supabase';
 

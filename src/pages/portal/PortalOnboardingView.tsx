@@ -660,7 +660,6 @@ const CsrForm: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }> =
 
 const RosterUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }> = ({
   agency,
-  onRefresh,
 }) => {
   const [uploadedFile, setUploadedFile] = useState<{ name: string; rowCount: number } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -846,7 +845,6 @@ const RosterUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void>
 
 const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }> = ({
   agency,
-  onRefresh,
 }) => {
   const [templates, setTemplates] = useState<CrmTemplate[]>([]);
   const [uploadedFile, setUploadedFile] = useState<{ name: string; rowCount: number } | null>(null);

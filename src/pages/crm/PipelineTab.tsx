@@ -235,7 +235,7 @@ export const PipelineTab: React.FC = () => {
 
   const advanceStage = async (record: PipelineRecord) => {
     const stageKeys = STAGES.map((s) => s.key);
-    const currentIdx = stageKeys.indexOf(record.stage);
+    const currentIdx = stageKeys.indexOf(record.stage as (typeof stageKeys)[number]);
     if (currentIdx < 0 || currentIdx >= stageKeys.length - 1) return;
     if (record.stage === 'processing') return;
 
@@ -269,7 +269,7 @@ export const PipelineTab: React.FC = () => {
 
   const regressStage = async (record: PipelineRecord) => {
     const stageKeys = STAGES.map((s) => s.key);
-    const currentIdx = stageKeys.indexOf(record.stage);
+    const currentIdx = stageKeys.indexOf(record.stage as (typeof stageKeys)[number]);
     if (currentIdx <= 0) return;
 
     const prevStage = stageKeys[currentIdx - 1];

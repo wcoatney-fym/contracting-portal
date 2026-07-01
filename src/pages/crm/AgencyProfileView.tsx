@@ -325,7 +325,6 @@ const OverviewTab: React.FC<{
   agentsOnboarded,
   agentsInPipeline,
   childAgencies,
-  parentAgency,
   onNavigateToAgency,
   onTabChange,
   onAgencyUpdated,

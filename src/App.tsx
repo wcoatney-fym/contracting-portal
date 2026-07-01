@@ -50,12 +50,14 @@ const ProtectedApp: React.FC = () => {
     setCheckingSlug(true);
     setSlugChecked(false);
 
-    supabase
+    Promise.resolve(
+      supabase
       .from('crm_agencies')
       .select('slug')
       .eq('slug', potentialSlug)
       .eq('is_active', true)
       .maybeSingle()
+    )
       .then(({ data }) => {
         if (cancelled) return;
         setPortalSlug(data ? data.slug : null);
