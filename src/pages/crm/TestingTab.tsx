@@ -59,6 +59,7 @@ export const TestingTab: React.FC = () => {
         name,
         is_test: true,
         is_active: true,
+        crm_enabled: true,
         onboarding_status: 'pending_csr_assignment',
         csr_confirmed: false,
         roster_confirmed: false,
