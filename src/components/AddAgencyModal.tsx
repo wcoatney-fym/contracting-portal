@@ -56,6 +56,16 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
       return;
     }
 
+    // Ensure auth session is active before writing
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      const serviceEmail = import.meta.env.VITE_SERVICE_EMAIL;
+      const servicePassword = import.meta.env.VITE_SERVICE_PASSWORD;
+      if (serviceEmail && servicePassword) {
+        await supabase.auth.signInWithPassword({ email: serviceEmail, password: servicePassword });
+      }
+    }
+
     const portalPassword = `${trimmedName}CRMPortal!`;
 
     const { data: newAgency, error: insertError } = await supabase
@@ -79,28 +89,32 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
       if (insertError.code === '23505') {
         setError('An agency with this name already exists.');
       } else {
-        setError('Failed to create agency. Please try again.');
+        setError(`Failed to create agency: ${insertError.message}`);
       }
       setSubmitting(false);
       return;
     }
 
-    if (newAgency) {
-      const parentName = agencyType === 'sub'
-        ? mainAgencies.find((a) => a.id === parentAgencyId)?.name
-        : null;
-      const message = existingAgency
-        ? `Existing agency "${trimmedName}" added -- zaps paused for backfill`
-        : agencyType === 'sub'
-          ? `New sub-agency "${trimmedName}" added under ${parentName} -- begin onboarding`
-          : `New agency "${trimmedName}" added -- begin onboarding`;
-
-      await supabase.from('crm_notifications').insert({
-        agency_id: newAgency.id,
-        type: 'agency_added',
-        message,
-      });
+    if (!newAgency) {
+      setError('Agency creation failed. Please log out and log back in, then try again.');
+      setSubmitting(false);
+      return;
     }
+
+    const parentName = agencyType === 'sub'
+      ? mainAgencies.find((a) => a.id === parentAgencyId)?.name
+      : null;
+    const message = existingAgency
+      ? `Existing agency "${trimmedName}" added -- zaps paused for backfill`
+      : agencyType === 'sub'
+        ? `New sub-agency "${trimmedName}" added under ${parentName} -- begin onboarding`
+        : `New agency "${trimmedName}" added -- begin onboarding`;
+
+    await supabase.from('crm_notifications').insert({
+      agency_id: newAgency.id,
+      type: 'agency_added',
+      message,
+    });
 
     setSubmitting(false);
     onSuccess();

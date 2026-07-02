@@ -126,6 +126,17 @@ export const Hierarchy: React.FC = () => {
     setSelectedAgency(updated);
   };
 
+  const ensureSession = async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      const serviceEmail = import.meta.env.VITE_SERVICE_EMAIL;
+      const servicePassword = import.meta.env.VITE_SERVICE_PASSWORD;
+      if (serviceEmail && servicePassword) {
+        await supabase.auth.signInWithPassword({ email: serviceEmail, password: servicePassword });
+      }
+    }
+  };
+
   const handleAddAgency = async (name: string, parentId: string, contracting: {
     agency_npn: string;
     agency_ein: string;
@@ -134,6 +145,7 @@ export const Hierarchy: React.FC = () => {
     contracting_email: string;
     contracting_contact: string;
   }) => {
+    await ensureSession();
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const portalPassword = `${name}CRMPortal!`;
 
@@ -170,6 +182,7 @@ export const Hierarchy: React.FC = () => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    await ensureSession();
     const { error } = await supabase
       .from('crm_agencies')
       .delete()
