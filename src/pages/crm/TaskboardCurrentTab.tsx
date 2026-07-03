@@ -18,8 +18,10 @@ import {
   Calendar,
   UserCheck,
   Package,
+  Zap,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { fireCrmOnboardingWebhook } from '../../lib/webhooks';
 import type { CrmTicket, CrmTicketMessage } from '../../lib/supabase';
 
 interface TicketWithAgency extends CrmTicket {
@@ -620,7 +622,60 @@ const TicketCard: React.FC<{
   onStatusChange: (id: string, status: CrmTicket['status']) => void;
 }> = ({ ticket, onClick, onStatusChange }) => {
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [zapSending, setZapSending] = useState(false);
+  const [zapResult, setZapResult] = useState<'success' | 'failed' | 'paused' | null>(null);
   const priority = PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.normal;
+  const isRosterEdit = ticket.order_type === 'roster-edit' && !!ticket.roster_row_id;
+
+  const handleSendToZap = async () => {
+    if (!ticket.roster_row_id) return;
+    setZapSending(true);
+    setZapResult(null);
+
+    // Pull the live payload straight from the referenced crm_roster row.
+    const { data: row } = await supabase
+      .from('crm_roster')
+      .select('row_data')
+      .eq('id', ticket.roster_row_id)
+      .maybeSingle();
+
+    if (!row) {
+      setZapResult('failed');
+      setZapSending(false);
+      return;
+    }
+
+    const { data: agencyData } = await supabase
+      .from('crm_agencies')
+      .select('zaps_paused')
+      .eq('name', ticket.agency_name)
+      .maybeSingle();
+
+    if (agencyData?.zaps_paused) {
+      setZapResult('paused');
+      setZapSending(false);
+      return;
+    }
+
+    const rd = row.row_data as Record<string, string>;
+    const success = await fireCrmOnboardingWebhook({
+      seatNumber: rd['Seat Number'] || '',
+      agentNpn: rd['Agent NPN'] || '',
+      firstName: rd['First Name'] || '',
+      lastName: rd['Last Name'] || '',
+      email: rd['Email'] || '',
+      phone: rd['Phone'] || '',
+      profileImage: rd['All Templates | Agent Profile Image'] || '',
+      crmNumber: rd['All Templates | Agent CRM #'] || '',
+      agency: ticket.agency_name,
+      digitalBusinessCardUrl: rd['Digital Business Card Home Page'] || '',
+      confirmationPageUrl: rd['Appt Booked Confirmation Page'] || '',
+      calendarEmbedCode: rd['Calendar Embed Code'] || '',
+    });
+
+    setZapResult(success ? 'success' : 'failed');
+    setZapSending(false);
+  };
 
   return (
     <div
@@ -670,7 +725,42 @@ const TicketCard: React.FC<{
           <span className="text-[10px] font-medium text-steel-500 bg-steel-50 px-2 py-0.5 rounded-md">
             {CATEGORY_LABELS[ticket.category] || ticket.category}
           </span>
+          {isRosterEdit && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md">
+              <Zap className="w-2.5 h-2.5" />
+              Roster Edit
+            </span>
+          )}
         </div>
+
+        {isRosterEdit && (
+          <div className="mt-3" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={handleSendToZap}
+              disabled={zapSending}
+              className={`w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                zapResult === 'success'
+                  ? 'text-green-700 bg-green-50 border border-green-200'
+                  : zapResult === 'failed'
+                  ? 'text-red-700 bg-red-50 border border-red-200'
+                  : zapResult === 'paused'
+                  ? 'text-steel-500 bg-steel-50 border border-steel-200'
+                  : 'text-white bg-amber-500 hover:bg-amber-600'
+              }`}
+            >
+              <Zap className={`w-3.5 h-3.5 ${zapSending ? 'animate-pulse' : ''}`} />
+              {zapSending
+                ? 'Sending...'
+                : zapResult === 'success'
+                ? 'Sent to Zap'
+                : zapResult === 'failed'
+                ? 'Failed -- Retry'
+                : zapResult === 'paused'
+                ? 'Zaps Paused'
+                : 'Send to Zap'}
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-steel-100">
           <span className="text-[10px] text-steel-500 flex items-center gap-1">

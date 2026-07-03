@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Search, UserPlus, UserX, X, AlertTriangle, Building2 } from 'lucide-react';
+import { Users, Search, UserPlus, UserX, X, AlertTriangle, Building2, Pencil } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { fireCrmOnboardingWebhook } from '../../lib/webhooks';
 import type { CrmAgency } from '../../lib/supabase';
@@ -22,6 +22,7 @@ export const PortalAgentsTab: React.FC<PortalAgentsTabProps> = ({ agency, agency
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<RosterAgent | null>(null);
   const [terminateTarget, setTerminateTarget] = useState<RosterAgent | null>(null);
   const [terminating, setTerminating] = useState(false);
   const [terminateError, setTerminateError] = useState('');
@@ -302,13 +303,22 @@ export const PortalAgentsTab: React.FC<PortalAgentsTabProps> = ({ agency, agency
                     {row.row_data['Agent NPN'] || '--'}
                   </td>
                   <td className="px-5 py-3.5 whitespace-nowrap">
-                    <button
-                      onClick={() => setTerminateTarget(row)}
-                      className="p-1.5 text-steel-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Terminate agent"
-                    >
-                      <UserX className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setEditTarget(row)}
+                        className="p-1.5 text-steel-400 hover:text-navy-600 hover:bg-navy-50 rounded-lg transition-colors"
+                        title="Edit agent"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setTerminateTarget(row)}
+                        className="p-1.5 text-steel-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Terminate agent"
+                      >
+                        <UserX className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -334,6 +344,15 @@ export const PortalAgentsTab: React.FC<PortalAgentsTabProps> = ({ agency, agency
           hasMultipleAgencies={hasMultipleAgencies}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => { setShowAddModal(false); loadAgents(); }}
+        />
+      )}
+
+      {editTarget && (
+        <EditAgentModal
+          target={editTarget}
+          agency={agency}
+          onClose={() => setEditTarget(null)}
+          onSuccess={() => { setEditTarget(null); loadAgents(); }}
         />
       )}
 
@@ -386,6 +405,244 @@ export const PortalAgentsTab: React.FC<PortalAgentsTabProps> = ({ agency, agency
 
 const MALE_PROFILE_IMAGE = 'https://storage.googleapis.com/msgsndr/YM9XmCanfO6p28b1sQOH/media/6882b3d23303840127a970fb.png';
 const FEMALE_PROFILE_IMAGE = 'https://storage.googleapis.com/msgsndr/YM9XmCanfO6p28b1sQOH/media/6882b3d2f665866357dfd218.png';
+
+const EditAgentModal: React.FC<{
+  target: RosterAgent;
+  agency: CrmAgency;
+  onClose: () => void;
+  onSuccess: () => void;
+}> = ({ target, agency, onClose, onSuccess }) => {
+  const currentImage = target.row_data['All Templates | Agent Profile Image'] || '';
+  const initialGender = currentImage === FEMALE_PROFILE_IMAGE ? 'Female' : currentImage === MALE_PROFILE_IMAGE ? 'Male' : '';
+
+  const [form, setForm] = useState({
+    firstName: target.row_data['First Name'] || '',
+    lastName: target.row_data['Last Name'] || '',
+    email: target.row_data['Email'] || '',
+    phone: target.row_data['Phone'] || '',
+    gender: initialGender,
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const npn = target.row_data['Agent NPN'] || '';
+  const targetAgencyName = target.agencyName || agency.name;
+
+  const updateField = (field: string, value: string) => {
+    setForm((f) => ({ ...f, [field]: value }));
+    setError('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.phone.trim() || !form.gender) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const profileImage = form.gender === 'Male' ? MALE_PROFILE_IMAGE : FEMALE_PROFILE_IMAGE;
+
+      // Update the crm_roster row (single source of truth for portal + CRM team).
+      const updatedRowData = {
+        ...target.row_data,
+        'First Name': form.firstName.trim(),
+        'Last Name': form.lastName.trim(),
+        'Phone': form.phone.trim(),
+        'phone': form.phone.trim(),
+        'Email': form.email.trim(),
+        'email': form.email.trim(),
+        'All Templates | Agent Profile Image': profileImage,
+      };
+
+      const { error: updateError } = await supabase
+        .from('crm_roster')
+        .update({ row_data: updatedRowData })
+        .eq('id', target.id);
+
+      if (updateError) {
+        setError('Failed to save changes. Please try again.');
+        setSubmitting(false);
+        return;
+      }
+
+      // Create a CRM work order so the CRM team can re-fire the onboarding Zap.
+      const { data: agencyRecord } = await supabase
+        .from('crm_agencies')
+        .select('id')
+        .eq('name', targetAgencyName)
+        .maybeSingle();
+
+      if (agencyRecord?.id) {
+        const agentName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
+        await supabase.from('crm_tickets').insert({
+          agency_id: agencyRecord.id,
+          subject: `Roster edit -- ${agentName}`,
+          description: `${targetAgencyName} edited roster seat #${target.row_data['Seat Number'] || ''} for ${agentName}. Review and Send to Zap to push the update.`,
+          category: 'agent-issue',
+          status: 'open',
+          priority: 'normal',
+          submitted_by: targetAgencyName,
+          order_type: 'roster-edit',
+          roster_row_id: target.id,
+        });
+      }
+
+      onSuccess();
+    } catch {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-steel-200 sticky top-0 bg-white z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-navy-50 flex items-center justify-center border border-navy-100">
+              <Pencil className="w-5 h-5 text-navy-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-steel-900">Edit Agent</h3>
+              <p className="text-xs text-steel-500">Creates a work order for the CRM team</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-steel-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-steel-400" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-steel-700 mb-1">
+                First Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.firstName}
+                onChange={(e) => updateField('firstName', e.target.value)}
+                className="w-full px-4 py-2.5 border border-steel-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                placeholder="John"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-steel-700 mb-1">
+                Last Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.lastName}
+                onChange={(e) => updateField('lastName', e.target.value)}
+                className="w-full px-4 py-2.5 border border-steel-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                placeholder="Doe"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-steel-700 mb-1">
+              Email <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => updateField('email', e.target.value)}
+              className="w-full px-4 py-2.5 border border-steel-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+              placeholder="john@example.com"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-steel-700 mb-1">
+                Phone <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => updateField('phone', e.target.value)}
+                className="w-full px-4 py-2.5 border border-steel-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                placeholder="(555) 123-4567"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-steel-700 mb-1">
+                NPN
+              </label>
+              <input
+                type="text"
+                value={npn || '--'}
+                readOnly
+                disabled
+                className="w-full px-4 py-2.5 border border-steel-200 rounded-lg bg-steel-50 text-steel-500 text-sm cursor-not-allowed"
+                title="NPN cannot be edited"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-steel-700 mb-2">
+              Gender <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => updateField('gender', 'Male')}
+                className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors ${
+                  form.gender === 'Male'
+                    ? 'bg-navy-50 border-navy-300 text-navy-700 ring-2 ring-navy-500/20'
+                    : 'bg-white border-steel-300 text-steel-700 hover:bg-steel-50'
+                }`}
+              >
+                Male
+              </button>
+              <button
+                type="button"
+                onClick={() => updateField('gender', 'Female')}
+                className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors ${
+                  form.gender === 'Female'
+                    ? 'bg-navy-50 border-navy-300 text-navy-700 ring-2 ring-navy-500/20'
+                    : 'bg-white border-steel-300 text-steel-700 hover:bg-steel-50'
+                }`}
+              >
+                Female
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-steel-700 bg-white border border-steel-300 rounded-lg hover:bg-steel-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-5 py-2 text-sm font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50"
+            >
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 const AddAgentModal: React.FC<{
   agency: CrmAgency;
