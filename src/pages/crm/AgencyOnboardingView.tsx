@@ -1206,6 +1206,9 @@ const RosterStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ ag
         profileImage: rd['All Templates | Agent Profile Image'] || '',
         crmNumber: rd['All Templates | Agent CRM #'] || '',
         agency: agency.name,
+        digitalBusinessCardUrl: rd['Digital Business Card Home Page'] || '',
+        confirmationPageUrl: rd['Appt Booked Confirmation Page'] || '',
+        calendarEmbedCode: rd['Calendar Embed Code'] || '',
       });
 
       if (success) {
@@ -1232,6 +1235,9 @@ const RosterStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ ag
           profileImage: rd['All Templates | Agent Profile Image'] || '',
           crmNumber: rd['All Templates | Agent CRM #'] || '',
           agency: agency.name,
+          digitalBusinessCardUrl: rd['Digital Business Card Home Page'] || '',
+          confirmationPageUrl: rd['Appt Booked Confirmation Page'] || '',
+          calendarEmbedCode: rd['Calendar Embed Code'] || '',
         });
 
         if (success) {
