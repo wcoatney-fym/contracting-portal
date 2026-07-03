@@ -135,7 +135,6 @@ interface CrmOnboardingWebhookData {
   profileImage: string;
   crmNumber: string;
   agency: string;
-  // TODO(charlie): confirm whether GHL onboarding requires these 3 fields; currently sent omitted
   digitalBusinessCardUrl?: string;
   confirmationPageUrl?: string;
   calendarEmbedCode?: string;
