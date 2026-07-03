@@ -24,6 +24,7 @@ import {
   Calendar,
   Globe,
   Building2,
+  Pencil,
   AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -51,8 +52,17 @@ export const AgencyOnboardingView: React.FC<AgencyOnboardingViewProps> = ({
   onNavigateToAgency = () => {},
 }) => {
   const [agency, setAgency] = useState<CrmAgency>(initialAgency);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const currentIdx = getStepIndex(agency);
   const isTest = agency.is_test;
+
+  const renderStepBody = (idx: number) => {
+    if (idx === 0) return <CsrStep agency={agency} onRefresh={refreshAgency} />;
+    if (idx === 1) return <PhoneSetupStep agency={agency} onRefresh={refreshAgency} />;
+    if (idx === 2) return <RosterStep agency={agency} onRefresh={refreshAgency} />;
+    if (idx === 3) return <DbaStep agency={agency} onRefresh={refreshAgency} />;
+    return null;
+  };
 
   const refreshAgency = async () => {
     const { data } = await supabase
@@ -149,21 +159,27 @@ export const AgencyOnboardingView: React.FC<AgencyOnboardingViewProps> = ({
               return <LockedStepCard key={step.key} step={step} />;
             }
             if (state === 'complete') {
-              return <CompletedStepCard key={step.key} step={step} />;
+              if (editingIdx === idx) {
+                return (
+                  <div key={step.key} className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-semibold text-amber-600 uppercase tracking-wide">
+                        Editing — {step.label}
+                      </span>
+                      <button
+                        onClick={async () => { setEditingIdx(null); await refreshAgency(); }}
+                        className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Done editing
+                      </button>
+                    </div>
+                    {renderStepBody(idx)}
+                  </div>
+                );
+              }
+              return <CompletedStepCard key={step.key} step={step} onEdit={() => setEditingIdx(idx)} />;
             }
-            if (idx === 0) {
-              return <CsrStep key={step.key} agency={agency} onRefresh={refreshAgency} />;
-            }
-            if (idx === 1) {
-              return <PhoneSetupStep key={step.key} agency={agency} onRefresh={refreshAgency} />;
-            }
-            if (idx === 2) {
-              return <RosterStep key={step.key} agency={agency} onRefresh={refreshAgency} />;
-            }
-            if (idx === 3) {
-              return <DbaStep key={step.key} agency={agency} onRefresh={refreshAgency} />;
-            }
-            return null;
+            return <React.Fragment key={step.key}>{renderStepBody(idx)}</React.Fragment>;
           })}
         </div>
       )}
@@ -255,7 +271,8 @@ const LockedStepCard: React.FC<{ step: typeof STEPS[number] }> = ({ step }) => (
 
 const CompletedStepCard: React.FC<{
   step: typeof STEPS[number];
-}> = ({ step }) => (
+  onEdit?: () => void;
+}> = ({ step, onEdit }) => (
   <div className="bg-emerald-50/50 rounded-xl border border-emerald-200 p-6">
     <div className="flex items-center gap-3">
       <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
@@ -265,6 +282,15 @@ const CompletedStepCard: React.FC<{
         <h3 className="font-semibold text-emerald-800">{step.label}</h3>
         <p className="text-xs text-emerald-600">Confirmed</p>
       </div>
+      {onEdit && (
+        <button
+          onClick={onEdit}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-100 transition-colors"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          Edit
+        </button>
+      )}
     </div>
   </div>
 );
@@ -858,16 +884,20 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  {!businessDetailsSaved && businessName.trim() && (businessLogoUrl.trim() || logoUnavailable) && (
+                  {businessName.trim() && (businessLogoUrl.trim() || logoUnavailable) && (
                     <button
                       onClick={handleSaveBusinessDetails}
                       disabled={saving === 'business_details'}
                       className="px-4 py-2 text-xs font-medium text-navy-600 bg-blue-50 border border-navy-600/20 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
                     >
-                      {saving === 'business_details' ? 'Saving...' : 'Save Business Details'}
+                      {saving === 'business_details'
+                        ? 'Saving...'
+                        : businessDetailsSaved
+                        ? 'Update Business Details'
+                        : 'Save Business Details'}
                     </button>
                   )}
-                  {businessDetailsSaved && (
+                  {businessDetailsSaved && saving !== 'business_details' && (
                     <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       Saved
