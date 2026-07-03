@@ -1734,6 +1734,17 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
   const [showSendBack, setShowSendBack] = useState(false);
   const [sendBackReason, setSendBackReason] = useState('');
   const [sendingBack, setSendingBack] = useState(false);
+  const [savingAutoComplete, setSavingAutoComplete] = useState(false);
+
+  const handleToggleAutoComplete = async () => {
+    setSavingAutoComplete(true);
+    await supabase
+      .from('crm_agencies')
+      .update({ dba_auto_complete: !agency.dba_auto_complete, updated_at: new Date().toISOString() })
+      .eq('id', agency.id);
+    await onRefresh();
+    setSavingAutoComplete(false);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -1913,6 +1924,27 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
         </div>
 
         <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Auto-complete DBA upload</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {agency.dba_auto_complete
+                  ? 'ON — the agency’s DBA upload completes onboarding automatically (no CRM approval).'
+                  : 'OFF — CRM Team must approve the DBA upload before onboarding completes.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={agency.dba_auto_complete}
+              onClick={handleToggleAutoComplete}
+              disabled={savingAutoComplete}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${agency.dba_auto_complete ? 'bg-emerald-500' : 'bg-gray-300'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${agency.dba_auto_complete ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
           {dbaTemplate && (
             <button
               onClick={() => downloadTemplate(dbaTemplate)}
