@@ -155,7 +155,27 @@ export const warmUpCrmOnboardingWebhook = async (): Promise<void> => {
   }
 };
 
+/**
+ * Calendar embed codes are raw HTML (<iframe ...>/<script ...>) containing double
+ * quotes and line breaks. Downstream (Zapier -> HL Pro Tools) drops these values
+ * into a JSON payload (custom_values_json); the literal quotes and newlines break
+ * the JSON ("Unexpected non-whitespace character after JSON"). Normalize to a
+ * single line with single-quoted attributes so it stays valid HTML AND JSON-safe.
+ */
+export const sanitizeEmbedCodeForJson = (embed?: string): string => {
+  if (!embed) return '';
+  return embed
+    .replace(/[\r\n\t]+/g, ' ') // remove line breaks / tabs
+    .replace(/"/g, "'")         // double quotes -> single quotes (valid HTML, JSON-safe)
+    .replace(/\s{2,}/g, ' ')     // collapse runs of whitespace
+    .trim();
+};
+
 export const fireCrmOnboardingWebhook = async (data: CrmOnboardingWebhookData): Promise<boolean> => {
+  const payload = {
+    ...data,
+    calendarEmbedCode: sanitizeEmbedCodeForJson(data.calendarEmbedCode),
+  };
   try {
     const response = await fetch(CRM_ONBOARDING_WEBHOOK_URL, {
       method: 'POST',
@@ -163,7 +183,7 @@ export const fireCrmOnboardingWebhook = async (data: CrmOnboardingWebhookData): 
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
 
     if (response.ok) {
