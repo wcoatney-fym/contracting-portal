@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   UserCheck,
   Database,
+  Shield,
   Phone,
   RefreshCw,
   AlertCircle,
@@ -923,14 +924,27 @@ const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }>
         message: `${agency.name} uploaded their DBA client roster (${rows.length} rows) -- action required`,
       });
 
-      if (agency.dba_sent_back_reason) {
-        await supabase
-          .from('crm_agencies')
-          .update({ dba_sent_back_reason: null, updated_at: new Date().toISOString() })
-          .eq('id', agency.id);
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (agency.dba_sent_back_reason) updates.dba_sent_back_reason = null;
+
+      if (agency.dba_auto_complete) {
+        // Toggle ON: no CRM approval required -- complete onboarding on upload.
+        updates.dba_confirmed = true;
+        updates.onboarding_status = 'onboarding_complete';
+      }
+
+      await supabase.from('crm_agencies').update(updates).eq('id', agency.id);
+
+      if (agency.dba_auto_complete) {
+        await supabase.from('crm_notifications').insert({
+          agency_id: agency.id,
+          type: 'dba_confirmed',
+          message: `DBA client roster auto-completed for ${agency.name} -- onboarding complete`,
+        });
       }
 
       setUploadedFile({ name: file.name, rowCount: rows.length });
+      await onRefresh();
     } catch {
       setError('Error uploading CSV. Please check the file and try again.');
     } finally {
@@ -953,6 +967,20 @@ const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }>
           </div>
         </div>
       )}
+
+      <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <Shield className="w-5 h-5 text-navy-600 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-gray-900">
+            {agency.dba_auto_complete ? 'Completes on upload' : 'CRM approval required'}
+          </p>
+          <p className="text-sm text-gray-600 mt-0.5">
+            {agency.dba_auto_complete
+              ? 'Your onboarding will finish automatically once your DBA roster is uploaded.'
+              : 'Your CRM team will review and approve your DBA roster before onboarding is marked complete.'}
+          </p>
+        </div>
+      </div>
 
       {dbaTemplate && (
         <button
