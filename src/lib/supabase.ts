@@ -341,6 +341,8 @@ export type CrmTicket = {
   status: 'open' | 'in-progress' | 'resolved' | 'closed';
   priority: 'low' | 'normal' | 'high';
   submitted_by: string;
+  roster_row_id: string | null;
+  order_type: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
