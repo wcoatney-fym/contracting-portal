@@ -623,10 +623,13 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
   const [urlPrefix, setUrlPrefix] = useState(agency.agency_url_prefix || '');
   const [businessName, setBusinessName] = useState(agency.business_name || '');
   const [businessLogoUrl, setBusinessLogoUrl] = useState(agency.business_logo_url || '');
+  const [logoUnavailable, setLogoUnavailable] = useState(false);
 
   const phoneSaved = !!agency.agency_phone?.trim();
   const calendarUrlSaved = !!agency.calendar_embed_code?.trim() && !!agency.agency_url_prefix?.trim();
-  const businessDetailsSaved = !!agency.business_name?.trim() && !!agency.business_logo_url?.trim();
+  // Logo URL is optional (some agencies have no hosted logo). Business details are
+  // considered saved once the business name is persisted.
+  const businessDetailsSaved = !!agency.business_name?.trim();
   const allSetupDone = agency.setup_subaccount && agency.setup_snapshot && agency.setup_ghl_api && agency.setup_zapier;
   const crossSellReady = phoneSaved && calendarUrlSaved;
   const canComplete = phoneValue.trim().length > 0 && allSetupDone && crossSellConfirmed && calendarUrlSaved && businessDetailsSaved;
@@ -673,13 +676,14 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
   };
 
   const handleSaveBusinessDetails = async () => {
-    if (!businessName.trim() || !businessLogoUrl.trim()) return;
+    if (!businessName.trim()) return;
+    if (!businessLogoUrl.trim() && !logoUnavailable) return;
     setSaving('business_details');
     await supabase
       .from('crm_agencies')
       .update({
         business_name: businessName.trim(),
-        business_logo_url: businessLogoUrl.trim(),
+        business_logo_url: logoUnavailable ? '' : businessLogoUrl.trim(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', agency.id);
@@ -818,15 +822,27 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Business Logo URL</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700">Business Logo URL <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={logoUnavailable}
+                        onChange={(e) => setLogoUnavailable(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      Unavailable
+                    </label>
+                  </div>
                   <input
                     type="url"
                     value={businessLogoUrl}
                     onChange={(e) => setBusinessLogoUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
-                    placeholder="https://example.com/logo.png"
+                    disabled={logoUnavailable}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:text-gray-400"
+                    placeholder={logoUnavailable ? 'Marked unavailable' : 'https://example.com/logo.png'}
                   />
-                  {businessLogoUrl.trim() && (
+                  {!logoUnavailable && businessLogoUrl.trim() && (
                     <div className="mt-3 flex items-center gap-3">
                       <div className="w-12 h-12 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
                         <img
@@ -842,7 +858,7 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  {!businessDetailsSaved && businessName.trim() && businessLogoUrl.trim() && (
+                  {!businessDetailsSaved && businessName.trim() && (businessLogoUrl.trim() || logoUnavailable) && (
                     <button
                       onClick={handleSaveBusinessDetails}
                       disabled={saving === 'business_details'}
