@@ -1740,16 +1740,32 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
   const [showSendBack, setShowSendBack] = useState(false);
   const [sendBackReason, setSendBackReason] = useState('');
   const [sendingBack, setSendingBack] = useState(false);
-  const [savingAutoComplete, setSavingAutoComplete] = useState(false);
+  const [savingNoDba, setSavingNoDba] = useState(false);
 
-  const handleToggleAutoComplete = async () => {
-    setSavingAutoComplete(true);
+  const handleToggleNoDba = async () => {
+    setSavingNoDba(true);
     await supabase
       .from('crm_agencies')
-      .update({ dba_auto_complete: !agency.dba_auto_complete, updated_at: new Date().toISOString() })
+      .update({ dba_not_applicable: !agency.dba_not_applicable, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
     await onRefresh();
-    setSavingAutoComplete(false);
+    setSavingNoDba(false);
+  };
+
+  const handleConfirmNoDba = async () => {
+    setConfirming(true);
+    const now = new Date().toISOString();
+    await supabase
+      .from('crm_agencies')
+      .update({ dba_confirmed: true, onboarding_status: 'onboarding_complete', updated_at: now })
+      .eq('id', agency.id);
+    await supabase.from('crm_notifications').insert({
+      agency_id: agency.id,
+      type: 'dba_confirmed',
+      message: `Onboarding completed for ${agency.name} without a DBA (no DBA on file) -- CRM approved`,
+    });
+    setConfirming(false);
+    await onRefresh();
   };
 
   useEffect(() => {
@@ -1930,25 +1946,37 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Auto-complete DBA upload</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {agency.dba_auto_complete
-                  ? 'ON — the agency’s DBA upload completes onboarding automatically (no CRM approval).'
-                  : 'OFF — CRM Team must approve the DBA upload before onboarding completes.'}
-              </p>
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-900">No DBA for this agency</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {agency.dba_not_applicable
+                    ? 'ON — this agency has no DBA. CRM approval completes onboarding without an upload.'
+                    : 'OFF — normal flow: agency uploads a DBA roster and CRM confirms it.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={agency.dba_not_applicable}
+                onClick={handleToggleNoDba}
+                disabled={savingNoDba || agency.dba_confirmed}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${agency.dba_not_applicable ? 'bg-emerald-500' : 'bg-gray-300'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${agency.dba_not_applicable ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={agency.dba_auto_complete}
-              onClick={handleToggleAutoComplete}
-              disabled={savingAutoComplete}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${agency.dba_auto_complete ? 'bg-emerald-500' : 'bg-gray-300'}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${agency.dba_auto_complete ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
+            {agency.dba_not_applicable && !agency.dba_confirmed && (
+              <button
+                onClick={handleConfirmNoDba}
+                disabled={confirming}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {confirming ? 'Completing...' : 'Approve & Complete Onboarding (No DBA)'}
+              </button>
+            )}
           </div>
 
           {dbaTemplate && (
