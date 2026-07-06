@@ -858,10 +858,24 @@ const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }>
 
   const handleSetNoDba = async (value: boolean) => {
     setSavingNoDba(true);
-    await supabase
+    setError('');
+    const { error: updateError } = await supabase
       .from('crm_agencies')
       .update({ dba_not_applicable: value, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
+    if (updateError) {
+      setError('Could not save that selection. Please try again or contact Contracting@teamFYM.com.');
+      setSavingNoDba(false);
+      return;
+    }
+    if (value) {
+      // Surface the opt-out in the CRM Team's onboarding ticket so it can be approved.
+      await supabase.from('crm_notifications').insert({
+        agency_id: agency.id,
+        type: 'dba_no_dba_selected',
+        message: `${agency.name} indicated they have no DBA client roster -- CRM approval required to complete onboarding`,
+      });
+    }
     await onRefresh();
     setSavingNoDba(false);
   };

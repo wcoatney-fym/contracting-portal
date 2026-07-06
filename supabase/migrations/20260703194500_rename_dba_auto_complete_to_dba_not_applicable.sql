@@ -16,5 +16,25 @@
   current behavior.
 */
 
-ALTER TABLE crm_agencies
-  RENAME COLUMN dba_auto_complete TO dba_not_applicable;
+-- Made idempotent: prod never had dba_auto_complete created via migration, so a bare
+-- RENAME fails (42703). Guard the rename and ensure the target column exists.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'crm_agencies' AND column_name = 'dba_auto_complete'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'crm_agencies' AND column_name = 'dba_not_applicable'
+  ) THEN
+    ALTER TABLE crm_agencies RENAME COLUMN dba_auto_complete TO dba_not_applicable;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'crm_agencies' AND column_name = 'dba_not_applicable'
+  ) THEN
+    ALTER TABLE crm_agencies
+      ADD COLUMN dba_not_applicable boolean NOT NULL DEFAULT false;
+  END IF;
+END $$;
