@@ -853,23 +853,28 @@ const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }>
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [savingNoDba, setSavingNoDba] = useState(false);
+  const [noDbaRequested, setNoDbaRequested] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const sentBackReason = agency.dba_sent_back_reason;
 
   const handleSetNoDba = async (value: boolean) => {
     setSavingNoDba(true);
-    await supabase
-      .from('crm_agencies')
-      .update({ dba_not_applicable: value, updated_at: new Date().toISOString() })
-      .eq('id', agency.id);
     if (value) {
       await supabase.from('crm_notifications').insert({
         agency_id: agency.id,
         type: 'no_dba_request',
         message: `${agency.name} indicated they have no DBA client roster -- approval required to complete onboarding`,
       });
+      setNoDbaRequested(true);
+    } else {
+      await supabase
+        .from('crm_notifications')
+        .delete()
+        .eq('agency_id', agency.id)
+        .eq('type', 'no_dba_request')
+        .eq('is_read', false);
+      setNoDbaRequested(false);
     }
-    await onRefresh();
     setSavingNoDba(false);
   };
 
@@ -886,9 +891,20 @@ const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }>
       if (existing && existing.length > 0) {
         setUploadedFile({ name: existing[0].file_name, rowCount: existing[0].row_count });
       }
+
+      const { data: pendingNoDba } = await supabase
+        .from('crm_notifications')
+        .select('id')
+        .eq('agency_id', agency.id)
+        .eq('type', 'no_dba_request')
+        .eq('is_read', false)
+        .limit(1);
+      if (pendingNoDba && pendingNoDba.length > 0) {
+        setNoDbaRequested(true);
+      }
     };
     load();
-  }, [agency.name]);
+  }, [agency.name, agency.id]);
 
   const downloadTemplate = (template: CrmTemplate) => {
     const csvHeader = template.headers.map(escapeField).join(',');
@@ -975,7 +991,7 @@ const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }>
         </div>
       )}
 
-      {agency.dba_not_applicable ? (
+      {noDbaRequested ? (
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <Shield className="w-5 h-5 text-navy-600 flex-shrink-0 mt-0.5" />

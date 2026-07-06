@@ -1741,14 +1741,26 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
   const [sendBackReason, setSendBackReason] = useState('');
   const [sendingBack, setSendingBack] = useState(false);
   const [savingNoDba, setSavingNoDba] = useState(false);
+  const [noDbaRequested, setNoDbaRequested] = useState(false);
 
   const handleToggleNoDba = async () => {
     setSavingNoDba(true);
-    await supabase
-      .from('crm_agencies')
-      .update({ dba_not_applicable: !agency.dba_not_applicable, updated_at: new Date().toISOString() })
-      .eq('id', agency.id);
-    await onRefresh();
+    const newValue = !noDbaRequested;
+    if (newValue) {
+      await supabase.from('crm_notifications').insert({
+        agency_id: agency.id,
+        type: 'no_dba_request',
+        message: `${agency.name} marked as no DBA by CRM team -- approval required to complete onboarding`,
+      });
+    } else {
+      await supabase
+        .from('crm_notifications')
+        .delete()
+        .eq('agency_id', agency.id)
+        .eq('type', 'no_dba_request')
+        .eq('is_read', false);
+    }
+    setNoDbaRequested(newValue);
     setSavingNoDba(false);
   };
 
@@ -1759,6 +1771,11 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
       .from('crm_agencies')
       .update({ dba_confirmed: true, onboarding_status: 'onboarding_complete', updated_at: now })
       .eq('id', agency.id);
+    await supabase
+      .from('crm_notifications')
+      .update({ is_read: true })
+      .eq('agency_id', agency.id)
+      .eq('type', 'no_dba_request');
     await supabase.from('crm_notifications').insert({
       agency_id: agency.id,
       type: 'dba_confirmed',
@@ -1781,9 +1798,20 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
       if (existing && existing.length > 0) {
         setUploadedFile({ name: existing[0].file_name, rowCount: existing[0].row_count });
       }
+
+      const { data: pendingNoDba } = await supabase
+        .from('crm_notifications')
+        .select('id')
+        .eq('agency_id', agency.id)
+        .eq('type', 'no_dba_request')
+        .eq('is_read', false)
+        .limit(1);
+      if (pendingNoDba && pendingNoDba.length > 0) {
+        setNoDbaRequested(true);
+      }
     };
     load();
-  }, [agency.name]);
+  }, [agency.name, agency.id]);
 
   const downloadTemplate = (template: CrmTemplate) => {
     const csvHeader = template.headers.map(escapeField).join(',');
@@ -1951,7 +1979,7 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
               <div>
                 <p className="text-sm font-medium text-gray-900">No DBA for this agency</p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {agency.dba_not_applicable
+                  {noDbaRequested
                     ? 'ON — this agency has no DBA. CRM approval completes onboarding without an upload.'
                     : 'OFF — normal flow: agency uploads a DBA roster and CRM confirms it.'}
                 </p>
@@ -1959,15 +1987,15 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
               <button
                 type="button"
                 role="switch"
-                aria-checked={agency.dba_not_applicable}
+                aria-checked={noDbaRequested}
                 onClick={handleToggleNoDba}
                 disabled={savingNoDba || agency.dba_confirmed}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${agency.dba_not_applicable ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${noDbaRequested ? 'bg-emerald-500' : 'bg-gray-300'}`}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${agency.dba_not_applicable ? 'translate-x-6' : 'translate-x-1'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${noDbaRequested ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </div>
-            {agency.dba_not_applicable && !agency.dba_confirmed && (
+            {noDbaRequested && !agency.dba_confirmed && (
               <button
                 onClick={handleConfirmNoDba}
                 disabled={confirming}

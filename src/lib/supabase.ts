@@ -106,7 +106,6 @@ export type CrmAgency = {
   csr_confirmed: boolean;
   roster_confirmed: boolean;
   dba_confirmed: boolean;
-  dba_not_applicable: boolean;
   is_test: boolean;
   agency_type: 'main' | 'sub';
   parent_agency_id: string | null;
