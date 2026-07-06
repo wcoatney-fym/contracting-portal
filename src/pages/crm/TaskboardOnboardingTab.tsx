@@ -30,7 +30,7 @@ export const TaskboardOnboardingTab: React.FC = () => {
         .from('crm_notifications')
         .select('id')
         .eq('is_read', false)
-        .in('type', ['roster_uploaded', 'dba_uploaded']),
+        .in('type', ['roster_uploaded', 'dba_uploaded', 'no_dba_request']),
     ]);
     setAgencies(agencyRes.data || []);
     setPendingActionCount((notifRes.data || []).length);

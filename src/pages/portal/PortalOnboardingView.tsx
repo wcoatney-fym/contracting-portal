@@ -862,6 +862,13 @@ const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }>
       .from('crm_agencies')
       .update({ dba_not_applicable: value, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
+    if (value) {
+      await supabase.from('crm_notifications').insert({
+        agency_id: agency.id,
+        type: 'no_dba_request',
+        message: `${agency.name} indicated they have no DBA client roster -- approval required to complete onboarding`,
+      });
+    }
     await onRefresh();
     setSavingNoDba(false);
   };
