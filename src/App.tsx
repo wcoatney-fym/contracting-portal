@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { LoginModal } from './components/LoginModal';
 import { Dashboard } from './pages/Dashboard';
 import { AgentIntake } from './pages/AgentIntake';
+import { AgencyIntake } from './pages/AgencyIntake';
 import { AgentTracking } from './pages/AgentTracking';
 import { AgentDatabase } from './pages/AgentDatabase';
 import { AgentPipeline } from './pages/AgentPipeline';
@@ -157,6 +158,7 @@ function App() {
           <Route path="/telesales-hip" element={<HIP />} />
           <Route path="/thank-you" element={<ThankYou />} />
           <Route path="/fym-agent-resources" element={<FymAgentResources />} />
+          <Route path="/agency-intake" element={<AgencyIntake />} />
           <Route path="/*" element={<ProtectedApp />} />
         </Routes>
       </BrowserRouter>
