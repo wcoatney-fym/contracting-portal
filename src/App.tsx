@@ -17,6 +17,7 @@ import { Telesales } from './pages/forms/Telesales';
 import { HIP } from './pages/forms/HIP';
 import { ThankYou } from './pages/ThankYou';
 import { FymAgentResources } from './pages/FymAgentResources';
+import { AgencyIntake } from './pages/AgencyIntake';
 import { AgencyPortal } from './pages/AgencyPortal';
 import { supabase } from './lib/supabase';
 import { AlertCircle } from 'lucide-react';
@@ -155,6 +156,7 @@ function App() {
           <Route path="/field-hip" element={<HIP />} />
           <Route path="/direct-pay-hip" element={<HIP />} />
           <Route path="/telesales-hip" element={<HIP />} />
+          <Route path="/agency-intake" element={<AgencyIntake />} />
           <Route path="/thank-you" element={<ThankYou />} />
           <Route path="/fym-agent-resources" element={<FymAgentResources />} />
           <Route path="/*" element={<ProtectedApp />} />
