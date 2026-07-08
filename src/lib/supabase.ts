@@ -362,6 +362,7 @@ export const RESERVED_SLUGS = new Set([
   'field-hip', 'direct-pay-hip', 'telesales-hip', 'thank-you',
   'dashboard', 'agent-intake', 'new-hires', 'populate-form', 'populate',
   'agent-tracking', 'agent-database', 'crm-team', 'crm',
+  'agency-intake',
 ]);
 
 export function generateSlug(name: string): string {
