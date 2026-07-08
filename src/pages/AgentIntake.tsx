@@ -29,20 +29,6 @@ interface NewHire {
   created_at: string;
 }
 
-interface UnsentForm {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  form_type: string;
-  agency: string;
-  security_code: string;
-  form_url: string;
-  expiration_date: string;
-  created_at: string;
-}
-
 const STORED_TO_DISPLAY_FORM_TYPE: Record<string, string> = {
   'hip': 'HIP',
   'hip-career': 'HIP Career',
@@ -75,7 +61,6 @@ export const AgentIntake: React.FC = () => {
   });
 
   const [generated, setGenerated] = useState<{
-    agentId: string;
     url: string;
     code: string;
     emailBody: string;
@@ -94,12 +79,6 @@ export const AgentIntake: React.FC = () => {
   const [webhookSent, setWebhookSent] = useState(false);
   const [sendingWebhook, setSendingWebhook] = useState(false);
   const [webhookError, setWebhookError] = useState<string | null>(null);
-
-  const [unsentForms, setUnsentForms] = useState<UnsentForm[]>([]);
-  const [unsentOpen, setUnsentOpen] = useState(false);
-  const [unsentLoading, setUnsentLoading] = useState(false);
-  const [resendingId, setResendingId] = useState<string | null>(null);
-  const [unsentNotice, setUnsentNotice] = useState<string | null>(null);
 
   const fetchNewHires = async () => {
     try {
@@ -121,84 +100,8 @@ export const AgentIntake: React.FC = () => {
     }
   };
 
-  const fetchUnsentForms = async () => {
-    try {
-      setUnsentLoading(true);
-      const { data, error } = await supabase
-        .from('agents')
-        .select('id, first_name, last_name, email, phone, form_type, agency, security_code, form_url, expiration_date, created_at')
-        .is('form_sent_at', null)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setUnsentForms(data || []);
-    } catch {
-      // non-fatal; queue simply stays empty
-    } finally {
-      setUnsentLoading(false);
-    }
-  };
-
-  const buildFormUrl = (storedFormType: string, agentId: string) => {
-    const configuredUrl = import.meta.env.VITE_APP_URL;
-    const baseUrl = (configuredUrl || window.location.origin).replace(/\/+$/, '');
-    const path: Record<string, string> = {
-      'life-only': '/life',
-      'field': '/field',
-      'direct-pay': '/direct-pay',
-      'telesales': '/telesales',
-      'hip': '/hip',
-      'hip-career': '/hip-career',
-      'hip-broker': '/hip-broker',
-    };
-    return `${baseUrl}${path[storedFormType] || ''}?id=${agentId}`;
-  };
-
-  const handleResendForm = async (agent: UnsentForm) => {
-    setResendingId(agent.id);
-    setUnsentNotice(null);
-    try {
-      // Regenerate a clean URL — this also repairs any malformed (double-slash) link.
-      const freshUrl = buildFormUrl(agent.form_type, agent.id);
-      if (freshUrl !== agent.form_url) {
-        await supabase.from('agents').update({ form_url: freshUrl }).eq('id', agent.id);
-      }
-
-      await firePopulateWebhook({
-        firstName: agent.first_name,
-        lastName: agent.last_name,
-        email: agent.email,
-        phone: agent.phone,
-        formType: agent.form_type,
-        agency: agent.agency,
-        generatedUrl: freshUrl,
-        securityCode: agent.security_code,
-        expirationDate: agent.expiration_date,
-      });
-
-      const sentAt = new Date().toISOString();
-      await supabase
-        .from('agents')
-        .update({ form_sent_at: sentAt, date_sent: sentAt })
-        .eq('id', agent.id);
-      await supabase.from('activity_log').insert({
-        agent_id: agent.id,
-        action: 'form_sent',
-        details: `Intake form re-sent to ${agent.first_name} ${agent.last_name} (${agent.email}) via Unsent Forms recovery`,
-      });
-
-      setUnsentNotice(`Sent to ${agent.first_name} ${agent.last_name}.`);
-      fetchUnsentForms();
-    } catch {
-      setUnsentNotice(`Failed to send to ${agent.first_name} ${agent.last_name}. Please try again.`);
-    } finally {
-      setResendingId(null);
-    }
-  };
-
   useEffect(() => {
     fetchNewHires();
-    fetchUnsentForms();
 
     const channel = supabase
       .channel('new_hires_changes')
@@ -270,9 +173,7 @@ export const AgentIntake: React.FC = () => {
 
   const generateFormUrl = (formType: string, agentId: string) => {
     const configuredUrl = import.meta.env.VITE_APP_URL;
-    // Strip any trailing slash so a prod VITE_APP_URL ending in "/" does not
-    // produce a malformed double-slash URL (e.g. contracting.teamfym.com//hip-career).
-    const baseUrl = (configuredUrl || window.location.origin).replace(/\/+$/, '');
+    const baseUrl = configuredUrl || window.location.origin;
     const typeMap: Record<string, string> = {
       'Life Only': '/life',
       'Field': '/field',
@@ -391,7 +292,6 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
       );
 
       setGenerated({
-        agentId: agent.id,
         url: formUrl,
         code: securityCode,
         emailBody,
@@ -443,21 +343,6 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
         expirationDate: generated.expirationDate,
       });
 
-      // Persist the successful send so it is auditable and unsent forms are
-      // recoverable. Only reached when firePopulateWebhook resolved (webhook
-      // returned OK + Zapier success), so form_sent_at reflects a real send.
-      const sentAt = new Date().toISOString();
-      await supabase
-        .from('agents')
-        .update({ form_sent_at: sentAt, date_sent: sentAt })
-        .eq('id', generated.agentId);
-
-      await supabase.from('activity_log').insert({
-        agent_id: generated.agentId,
-        action: 'form_sent',
-        details: `Intake form sent to ${generated.firstName} ${generated.lastName} (${generated.email})`,
-      });
-
       if (generated.newHireId) {
         await supabase
           .from('new_hires')
@@ -466,7 +351,6 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
       }
 
       setWebhookSent(true);
-      fetchUnsentForms();
     } catch {
       setWebhookError('Failed to send form to agent. Please try again.');
     } finally {
@@ -616,91 +500,6 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
                 </div>
               )}
             </div>
-          </div>
-        )}
-      </div>
-
-      <div className="mb-6 bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <button
-          onClick={() => { const next = !unsentOpen; setUnsentOpen(next); if (next) fetchUnsentForms(); }}
-          className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <AlertCircle className={`w-5 h-5 ${unsentForms.length > 0 ? 'text-amber-500' : 'text-gray-400'}`} />
-            <span className="font-semibold text-navy-600 text-lg">Unsent Forms</span>
-            {unsentForms.length > 0 && (
-              <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-white">
-                {unsentForms.length}
-              </span>
-            )}
-            <span className="text-xs text-gray-400">generated but never confirmed sent</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); fetchUnsentForms(); }}
-              disabled={unsentLoading}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${unsentLoading ? 'animate-spin' : ''}`} />
-            </button>
-            {unsentOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-          </div>
-        </button>
-        {unsentOpen && (
-          <div className="border-t border-gray-200">
-            {unsentNotice && (
-              <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">{unsentNotice}</div>
-            )}
-            {unsentLoading ? (
-              <div className="p-8 text-center">
-                <RefreshCw className="w-6 h-6 text-gray-400 animate-spin mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Loading unsent forms...</p>
-              </div>
-            ) : unsentForms.length === 0 ? (
-              <div className="p-8 text-center">
-                <CheckCircle className="w-10 h-10 text-green-300 mx-auto mb-3" />
-                <p className="text-sm font-medium text-gray-600 mb-1">No unsent forms</p>
-                <p className="text-xs text-gray-400">Pending agents with a confirmed send won't appear here.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Form Type</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agency</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {unsentForms.map((agent) => (
-                      <tr key={agent.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{agent.first_name} {agent.last_name}</td>
-                        <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600">{agent.email}</td>
-                        <td className="px-6 py-3 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 uppercase">{agent.form_type || '--'}</span>
-                        </td>
-                        <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600">{agent.agency || '--'}</td>
-                        <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{formatHireDate(agent.created_at)}</td>
-                        <td className="px-6 py-3 whitespace-nowrap text-right text-sm">
-                          <button
-                            onClick={() => handleResendForm(agent)}
-                            disabled={resendingId === agent.id}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-gold-500 text-white rounded hover:bg-gold-600 transition-colors text-sm disabled:opacity-50"
-                          >
-                            <Send className="w-3.5 h-3.5" />
-                            {resendingId === agent.id ? 'Sending...' : 'Send Form'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         )}
       </div>
