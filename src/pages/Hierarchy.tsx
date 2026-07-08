@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GitBranch, Plus, Search, Building2, Users, ChevronDown, ChevronRight, Monitor, X, Trash2, AlertTriangle } from 'lucide-react';
+import { GitBranch, Plus, Search, Building2, Users, ChevronDown, ChevronRight, Monitor, X, Trash2, AlertTriangle, Inbox, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { CrmAgency } from '../lib/supabase';
+import type { CrmAgency, AgencyIntakeSubmission } from '../lib/supabase';
 import { AgencyDetailPanel } from './hierarchy/AgencyDetailPanel';
 
 type AgencyNode = CrmAgency & {
@@ -59,13 +59,19 @@ export const Hierarchy: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AgencyNode | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pendingIntakes, setPendingIntakes] = useState<AgencyIntakeSubmission[]>([]);
+  const [processingIntakeId, setProcessingIntakeId] = useState<string | null>(null);
+  const [intakeError, setIntakeError] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [agencyRes, rosterRes] = await Promise.all([
+    const [agencyRes, rosterRes, intakeRes] = await Promise.all([
       supabase.from('crm_agencies').select('*').order('name'),
       supabase.from('crm_roster_uploads').select('agency, row_count').order('uploaded_at', { ascending: false }),
+      supabase.from('agency_intake_submissions').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
     ]);
+
+    setPendingIntakes((intakeRes.data as AgencyIntakeSubmission[]) || []);
 
     const allAgencies = (agencyRes.data || []).filter(a => !a.is_test);
     setAgencies(allAgencies);
@@ -179,6 +185,80 @@ export const Hierarchy: React.FC = () => {
     return error?.message || null;
   };
 
+  const handleApproveIntake = async (submission: AgencyIntakeSubmission) => {
+    setProcessingIntakeId(submission.id);
+    setIntakeError('');
+    await ensureSession();
+
+    const name = submission.agency_name.trim();
+    const parentId = submission.parent_agency_id;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const portalPassword = `${name}CRMPortal!`;
+
+    const { data, error } = await supabase
+      .from('crm_agencies')
+      .insert({
+        name,
+        agency_type: parentId ? 'sub' : 'main',
+        parent_agency_id: parentId,
+        onboarding_status: 'pending_csr_assignment',
+        is_active: true,
+        crm_enabled: false,
+        slug,
+        portal_password: portalPassword,
+        date_created: new Date().toISOString().slice(0, 10),
+        agency_npn: submission.agency_npn?.trim() || null,
+        agency_ein: submission.agency_ein?.trim() || null,
+        principal_agent: submission.principal_agent?.trim() || null,
+        principal_agent_npn: submission.principal_agent_npn?.trim() || null,
+        contracting_email: submission.contracting_email?.trim() || null,
+        contracting_contact: submission.contracting_contact?.trim() || null,
+      })
+      .select()
+      .maybeSingle();
+
+    if (error || !data) {
+      setIntakeError(
+        error?.code === '23505'
+          ? `An agency named "${name}" already exists. Reject this intake or rename before approving.`
+          : error?.message || 'Failed to create agency from intake.'
+      );
+      setProcessingIntakeId(null);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from('agency_intake_submissions')
+      .update({ status: 'approved', approved_agency_id: data.id, reviewed_at: new Date().toISOString() })
+      .eq('id', submission.id);
+
+    if (updateError) {
+      // Agency was created; surface the status-sync issue but don't leave it in the tray twice.
+      setIntakeError(`Agency created, but marking the intake approved failed: ${updateError.message}`);
+    }
+
+    setAgencies(prev => [...prev, data]);
+    setExpandedNodes(prev => new Set(parentId ? [...prev, data.id, parentId] : [...prev, data.id]));
+    setPendingIntakes(prev => prev.filter(s => s.id !== submission.id));
+    setProcessingIntakeId(null);
+  };
+
+  const handleRejectIntake = async (submission: AgencyIntakeSubmission) => {
+    setProcessingIntakeId(submission.id);
+    setIntakeError('');
+    await ensureSession();
+    const { error } = await supabase
+      .from('agency_intake_submissions')
+      .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
+      .eq('id', submission.id);
+    if (error) {
+      setIntakeError(`Failed to reject intake: ${error.message}`);
+    } else {
+      setPendingIntakes(prev => prev.filter(s => s.id !== submission.id));
+    }
+    setProcessingIntakeId(null);
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -229,6 +309,16 @@ export const Hierarchy: React.FC = () => {
           Add Agency
         </button>
       </div>
+
+      {pendingIntakes.length > 0 && (
+        <PendingIntakeTray
+          submissions={pendingIntakes}
+          processingId={processingIntakeId}
+          error={intakeError}
+          onApprove={handleApproveIntake}
+          onReject={handleRejectIntake}
+        />
+      )}
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-400" />
@@ -471,6 +561,100 @@ const DeleteConfirmModal: React.FC<{
     </div>
   );
 };
+
+const PendingIntakeTray: React.FC<{
+  submissions: AgencyIntakeSubmission[];
+  processingId: string | null;
+  error: string;
+  onApprove: (submission: AgencyIntakeSubmission) => void;
+  onReject: (submission: AgencyIntakeSubmission) => void;
+}> = ({ submissions, processingId, error, onApprove, onReject }) => {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/60 overflow-hidden">
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+            <Inbox className="w-4 h-4 text-amber-700" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-steel-900">
+              Pending Intake
+              <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-200 text-amber-800">
+                {submissions.length}
+              </span>
+            </p>
+            <p className="text-xs text-steel-500">Submitted via the public agency intake link — review to create the agency.</p>
+          </div>
+        </div>
+        {collapsed ? <ChevronRight className="w-4 h-4 text-steel-400" /> : <ChevronDown className="w-4 h-4 text-steel-400" />}
+      </button>
+
+      {!collapsed && (
+        <div className="px-4 pb-4 space-y-3">
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          )}
+          {submissions.map((s) => {
+            const busy = processingId === s.id;
+            return (
+              <div key={s.id} className="bg-white rounded-lg border border-steel-200 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-steel-900 text-sm truncate">{s.agency_name}</p>
+                    <p className="text-xs text-steel-500">
+                      {s.parent_agency_name ? `Parent: ${s.parent_agency_name}` : 'No parent (main agency)'}
+                      {' · '}
+                      {new Date(s.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => onReject(s)}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-steel-600 bg-white border border-steel-300 rounded-lg hover:bg-steel-50 transition-colors disabled:opacity-50"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => onApprove(s)}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      {busy ? 'Working...' : 'Approve'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                  <IntakeField label="Agency NPN" value={s.agency_npn} />
+                  <IntakeField label="Agency EIN" value={s.agency_ein} />
+                  <IntakeField label="Principal Agent" value={s.principal_agent} />
+                  <IntakeField label="Principal Agent NPN" value={s.principal_agent_npn} />
+                  <IntakeField label="Contracting Email" value={s.contracting_email} />
+                  <IntakeField label="Contracting Contact" value={s.contracting_contact || '—'} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const IntakeField: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="flex items-center gap-2">
+    <span className="text-steel-400">{label}:</span>
+    <span className="font-medium text-steel-700 truncate">{value}</span>
+  </div>
+);
 
 const AddAgencyHierarchyModal: React.FC<{
   agencies: CrmAgency[];

@@ -1,291 +1,286 @@
-import React, { useEffect, useState } from 'react';
-import { Building2, CheckCircle2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import type { CrmAgency } from '../lib/supabase';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const INTAKE_URL = `${SUPABASE_URL}/functions/v1/agency-intake-submit`;
-
-type ParentAgency = {
-  id: string;
-  name: string;
-  agency_type: string | null;
-  parent_agency_id: string | null;
-};
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
+/**
+ * Public, unauthenticated agency intake form.
+ *
+ * Route: /agency-intake  (no login gate -- handed to the contracting team as a link).
+ * Mirrors the "Add New Agency" modal fields. On submit it writes a `pending`
+ * row into `agency_intake_submissions` (anon INSERT only, per RLS). It never
+ * touches `crm_agencies` -- a CRM admin approves the submission from the
+ * Hierarchy tab, which is what creates the real agency record.
+ */
 export const AgencyIntake: React.FC = () => {
-  const [parents, setParents] = useState<ParentAgency[]>([]);
-  const [loadingParents, setLoadingParents] = useState(true);
-
-  const [name, setName] = useState('');
-  const [parentId, setParentId] = useState('');
-  const [agencyNpn, setAgencyNpn] = useState('');
-  const [agencyEin, setAgencyEin] = useState('');
-  const [principalAgent, setPrincipalAgent] = useState('');
-  const [principalAgentNpn, setPrincipalAgentNpn] = useState('');
-  const [contractingEmail, setContractingEmail] = useState('');
-  const [contractingContact, setContractingContact] = useState('');
-
+  const navigate = useNavigate();
+  const [mainAgencies, setMainAgencies] = useState<CrmAgency[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [submittedName, setSubmittedName] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  const [form, setForm] = useState({
+    agencyName: '',
+    parentAgencyId: '',
+    agencyNpn: '',
+    agencyEin: '',
+    principalAgent: '',
+    principalAgentNpn: '',
+    contractingEmail: '',
+    contractingContact: '',
+  });
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(INTAKE_URL, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Apikey: SUPABASE_ANON_KEY },
-        });
-        const data = await res.json();
-        if (cancelled) return;
-        if (data.success) {
-          const list: ParentAgency[] = data.agencies || [];
-          setParents(list);
-          const root = list.find((a) => a.agency_type === 'main');
-          if (root) setParentId(root.id);
-        }
-      } catch {
-        // dropdown will simply be empty; submit still validates parent server-side
-      } finally {
-        if (!cancelled) setLoadingParents(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    const loadMainAgencies = async () => {
+      const { data } = await supabase
+        .from('crm_agencies')
+        .select('id, name')
+        .eq('agency_type', 'main')
+        .eq('is_active', true)
+        .order('name');
+      setMainAgencies((data as CrmAgency[]) || []);
+    };
+    loadMainAgencies();
   }, []);
 
-  // Ordered, indented parent list (root main agency first, children nested).
-  const flatParents = (() => {
-    const result: { agency: ParentAgency; indent: number }[] = [];
-    const root = parents.find((a) => a.agency_type === 'main');
-    const addNode = (id: string, depth: number) => {
-      const a = parents.find((ag) => ag.id === id);
-      if (!a) return;
-      result.push({ agency: a, indent: depth });
-      parents
-        .filter((ag) => ag.parent_agency_id === id)
-        .sort((x, y) => x.name.localeCompare(y.name))
-        .forEach((child) => addNode(child.id, depth + 1));
-    };
-    if (root) addNode(root.id, 0);
-    // Any agencies not reachable from the root (defensive) get appended flat.
-    parents
-      .filter((a) => !result.some((r) => r.agency.id === a.id))
-      .forEach((a) => result.push({ agency: a, indent: 0 }));
-    return result;
-  })();
+  const setField = (key: keyof typeof form) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) { setError('Agency name is required.'); return; }
-    if (!parentId) { setError('Select a parent agency.'); return; }
-    if (!agencyNpn.trim()) { setError('Agency NPN is required.'); return; }
-    if (!agencyEin.trim()) { setError('Agency EIN is required.'); return; }
-    if (!principalAgent.trim()) { setError('Principal Agent name is required.'); return; }
-    if (!principalAgentNpn.trim()) { setError('Principal Agent NPN is required.'); return; }
-    if (!contractingEmail.trim()) { setError('Contracting email is required.'); return; }
-    if (!EMAIL_RE.test(contractingEmail.trim())) { setError('Please enter a valid email address.'); return; }
+    setError('');
+
+    const agencyName = form.agencyName.trim();
+    if (!agencyName) return setError('Agency Name is required.');
+    if (!form.agencyNpn.trim()) return setError('Agency NPN is required.');
+    if (!form.agencyEin.trim()) return setError('Agency EIN is required.');
+    if (!form.principalAgent.trim()) return setError('Principal Agent is required.');
+    if (!form.principalAgentNpn.trim()) return setError('Principal Agent NPN is required.');
+    if (!form.contractingEmail.trim()) return setError('Contracting Email is required.');
+
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contractingEmail.trim());
+    if (!emailOk) return setError('Please enter a valid Contracting Email.');
 
     setSubmitting(true);
-    setError('');
-    try {
-      const res = await fetch(INTAKE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          Apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          parentId,
-          agencyNpn: agencyNpn.trim(),
-          agencyEin: agencyEin.trim(),
-          principalAgent: principalAgent.trim(),
-          principalAgentNpn: principalAgentNpn.trim(),
-          contractingEmail: contractingEmail.trim(),
-          contractingContact: contractingContact.trim(),
-        }),
+
+    const parent = mainAgencies.find((a) => a.id === form.parentAgencyId);
+
+    const { error: insertError } = await supabase
+      .from('agency_intake_submissions')
+      .insert({
+        agency_name: agencyName,
+        parent_agency_id: form.parentAgencyId || null,
+        parent_agency_name: parent?.name ?? null,
+        agency_npn: form.agencyNpn.trim(),
+        agency_ein: form.agencyEin.trim(),
+        principal_agent: form.principalAgent.trim(),
+        principal_agent_npn: form.principalAgentNpn.trim(),
+        contracting_email: form.contractingEmail.trim(),
+        contracting_contact: form.contractingContact.trim() || null,
+        status: 'pending',
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || 'Submission failed. Please try again.');
-        setSubmitting(false);
-        return;
-      }
-      setSubmittedName(name.trim());
-    } catch {
-      setError('Network error. Please try again.');
-      setSubmitting(false);
+
+    setSubmitting(false);
+
+    if (insertError) {
+      setError(`Submission failed: ${insertError.message}`);
+      return;
     }
+
+    setSubmitted(true);
   };
 
-  if (submittedName) {
+  if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-10 w-full max-w-md text-center">
-          <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-5">
-            <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+      <div className="min-h-screen bg-steel-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-lg p-12 max-w-2xl w-full text-center">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-navy-600">FYM Financial</h1>
+            <p className="text-xs text-gray-600 mt-1">where transparency &amp; opportunity meet</p>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Agency Submitted</h2>
-          <p className="text-gray-500 text-sm mb-6">
-            <span className="font-medium text-gray-700">{submittedName}</span> has been submitted for
-            contracting. Our team will pick it up from the portal and begin onboarding.
+          <div className="mb-6">
+            <CheckCircle className="w-20 h-20 text-green-500 mx-auto" />
+          </div>
+          <h2 className="text-3xl font-bold text-gray-900 mb-6">Thank You!</h2>
+          <p className="text-lg text-gray-700 mb-4">
+            Your agency intake has been submitted. The Contracting team will review it and complete
+            setup shortly.
           </p>
-          <button
-            onClick={() => {
-              setSubmittedName(null);
-              setName(''); setAgencyNpn(''); setAgencyEin('');
-              setPrincipalAgent(''); setPrincipalAgentNpn('');
-              setContractingEmail(''); setContractingContact('');
-            }}
-            className="px-4 py-2.5 text-sm font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700"
-          >
-            Submit Another Agency
-          </button>
+          <p className="text-gray-600">
+            Questions? Contact{' '}
+            <a href="mailto:Contracting@teamfym.com" className="text-navy-600 hover:underline">
+              Contracting@teamfym.com
+            </a>
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-lg my-8">
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-200">
-          <div className="w-10 h-10 rounded-lg bg-navy-50 flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-navy-600" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">New Agency Intake</h1>
-            <p className="text-xs text-gray-500">Submit an agency for contracting</p>
-          </div>
+    <div className="min-h-screen bg-steel-50 py-10 px-4">
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-navy-600">FYM Financial</h1>
+          <p className="text-xs text-gray-600 mt-1">where transparency &amp; opportunity meet</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Agency Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setError(''); }}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-              placeholder="New agency name"
-            />
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-200">
+            <h2 className="text-xl font-bold text-navy-600">Agency Intake</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Complete this form to submit a new agency for contracting. Fields marked{' '}
+              <span className="text-red-500">*</span> are required.
+            </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Parent Agency <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              disabled={loadingParents}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-navy-500 focus:border-transparent disabled:opacity-60"
-            >
-              {loadingParents && <option value="">Loading agencies...</option>}
-              {!loadingParents && flatParents.length === 0 && <option value="">No agencies available</option>}
-              {flatParents.map(({ agency, indent }) => (
-                <option key={agency.id} value={agency.id}>
-                  {'\u00A0\u00A0'.repeat(indent)}{indent > 0 ? '-- ' : ''}{agency.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Agency Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.agencyName}
+                onChange={setField('agencyName')}
+                placeholder="New agency name"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                required
+              />
+            </div>
 
-          <div className="border-t border-gray-200 pt-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Contracting Details</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Agency NPN <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={agencyNpn}
-                  onChange={(e) => { setAgencyNpn(e.target.value); setError(''); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-                  placeholder="e.g. 12345678"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Agency EIN <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={agencyEin}
-                  onChange={(e) => { setAgencyEin(e.target.value); setError(''); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-                  placeholder="e.g. 12-3456789"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Principal Agent <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={principalAgent}
-                  onChange={(e) => { setPrincipalAgent(e.target.value); setError(''); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-                  placeholder="Full name"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Principal Agent NPN <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={principalAgentNpn}
-                  onChange={(e) => { setPrincipalAgentNpn(e.target.value); setError(''); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-                  placeholder="e.g. 87654321"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Contracting Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={contractingEmail}
-                  onChange={(e) => { setContractingEmail(e.target.value); setError(''); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-                  placeholder="email@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Contracting Contact</label>
-                <input
-                  type="text"
-                  value={contractingContact}
-                  onChange={(e) => { setContractingContact(e.target.value); setError(''); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-                  placeholder="If applicable"
-                />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Parent Agency</label>
+              <select
+                value={form.parentAgencyId}
+                onChange={setField('parentAgencyId')}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm bg-white"
+              >
+                <option value="">No parent (main agency)</option>
+                {mainAgencies.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="pt-2">
+              <p className="text-xs font-semibold tracking-wide text-gray-400 uppercase mb-3">
+                Contracting Details
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Agency NPN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.agencyNpn}
+                    onChange={setField('agencyNpn')}
+                    placeholder="e.g. 12345678"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Agency EIN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.agencyEin}
+                    onChange={setField('agencyEin')}
+                    placeholder="e.g. 12-3456789"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Principal Agent <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.principalAgent}
+                    onChange={setField('principalAgent')}
+                    placeholder="Full name"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Principal Agent NPN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.principalAgentNpn}
+                    onChange={setField('principalAgentNpn')}
+                    placeholder="e.g. 87654321"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contracting Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={form.contractingEmail}
+                    onChange={setField('contractingEmail')}
+                    placeholder="email@example.com"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contracting Contact
+                  </label>
+                  <input
+                    type="text"
+                    value={form.contractingContact}
+                    onChange={setField('contractingContact')}
+                    placeholder="If applicable"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent text-sm"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
-          )}
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 disabled:opacity-50"
-          >
-            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {submitting ? 'Submitting...' : 'Submit Agency'}
-          </button>
-        </form>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                disabled={submitting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-5 py-2 text-sm font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50"
+              >
+                {submitting ? 'Submitting...' : 'Submit Agency'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

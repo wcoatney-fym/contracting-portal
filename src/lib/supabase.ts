@@ -357,6 +357,24 @@ export type CrmTicketMessage = {
   created_at: string;
 };
 
+export type AgencyIntakeSubmission = {
+  id: string;
+  agency_name: string;
+  parent_agency_id: string | null;
+  parent_agency_name: string | null;
+  agency_npn: string;
+  agency_ein: string;
+  principal_agent: string;
+  principal_agent_npn: string;
+  contracting_email: string;
+  contracting_contact: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  approved_agency_id: string | null;
+  review_note: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+};
+
 export const RESERVED_SLUGS = new Set([
   'life', 'field', 'direct-pay', 'telesales', 'hip', 'hip-career', 'hip-broker',
   'field-hip', 'direct-pay-hip', 'telesales-hip', 'thank-you',
