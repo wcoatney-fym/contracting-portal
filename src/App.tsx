@@ -156,9 +156,9 @@ function App() {
           <Route path="/field-hip" element={<HIP />} />
           <Route path="/direct-pay-hip" element={<HIP />} />
           <Route path="/telesales-hip" element={<HIP />} />
-          <Route path="/agency-intake" element={<AgencyIntake />} />
           <Route path="/thank-you" element={<ThankYou />} />
           <Route path="/fym-agent-resources" element={<FymAgentResources />} />
+          <Route path="/agency-intake" element={<AgencyIntake />} />
           <Route path="/*" element={<ProtectedApp />} />
         </Routes>
       </BrowserRouter>
