@@ -45,6 +45,12 @@ import {
 import { supabase, formatPhoneDisplay } from '../../lib/supabase';
 import { avgContactsPerWeek, avgContactsPerMonth } from '../../lib/kpiHelpers';
 import { backfillCrossSellDefaults } from '../../lib/crossSellHelpers';
+import {
+  regenerateAgencyRosterHiddenFields,
+  pushRosterRowsToGhl,
+  type RosterRepushRow,
+  type RepushRowStatus,
+} from '../../lib/rosterRepush';
 import type { CrmAgency, AgencyGhlConfig, AgencyDeal, AgencyKpi, CrmTicket, CrmTicketMessage } from '../../lib/supabase';
 import { AgencyOnboardingView } from './AgencyOnboardingView';
 import { AgencyGhlTab } from './AgencyGhlTab';
@@ -88,6 +94,7 @@ export const AgencyProfileView: React.FC<AgencyProfileViewProps> = ({
   const [ghlConfig, setGhlConfig] = useState<AgencyGhlConfig | null>(null);
   const [deals, setDeals] = useState<AgencyDeal[]>([]);
   const [showBusinessInfoModal, setShowBusinessInfoModal] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
   const [kpi, setKpi] = useState<AgencyKpi | null>(null);
   const [agentsOnboarded, setAgentsOnboarded] = useState(0);
   const [agentsInPipeline, setAgentsInPipeline] = useState(0);
@@ -234,13 +241,20 @@ export const AgencyProfileView: React.FC<AgencyProfileViewProps> = ({
             </span>
           )}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => setShowBusinessInfoModal(true)}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-navy-600 bg-navy-600/5 border border-navy-600/15 rounded-lg hover:bg-navy-50 transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
             Edit Business Info
+          </button>
+          <button
+            onClick={() => setShowSyncModal(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-amber-500 border border-amber-500 rounded-lg hover:bg-amber-600 transition-colors"
+          >
+            <Repeat2 className="w-3.5 h-3.5" />
+            Sync Business Info to Roster
           </button>
         </div>
       </div>
@@ -274,6 +288,14 @@ export const AgencyProfileView: React.FC<AgencyProfileViewProps> = ({
         <EditBusinessInfoModal
           agency={agency}
           onClose={() => setShowBusinessInfoModal(false)}
+          onAgencyUpdated={handleAgencyUpdated}
+        />
+      )}
+
+      {showSyncModal && (
+        <SyncBusinessInfoModal
+          agency={agency}
+          onClose={() => setShowSyncModal(false)}
           onAgencyUpdated={handleAgencyUpdated}
         />
       )}
@@ -429,6 +451,315 @@ const EditBusinessInfoModal: React.FC<{
               </>
             )}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SyncBusinessInfoModal: React.FC<{
+  agency: CrmAgency;
+  onClose: () => void;
+  onAgencyUpdated: (a: CrmAgency) => void;
+}> = ({ agency, onClose, onAgencyUpdated }) => {
+  const [businessName, setBusinessName] = useState(agency.business_name || '');
+  const [businessLogoUrl, setBusinessLogoUrl] = useState(agency.business_logo_url || '');
+  const [urlPrefix, setUrlPrefix] = useState(agency.agency_url_prefix || '');
+  const [calendarEmbed, setCalendarEmbed] = useState(agency.calendar_embed_code || '');
+  const [resyncAll, setResyncAll] = useState(false);
+
+  const [phase, setPhase] = useState<'form' | 'running' | 'done'>('form');
+  const [statusText, setStatusText] = useState('');
+  const [progress, setProgress] = useState({ sent: 0, failed: 0, total: 0 });
+  const [rowReadout, setRowReadout] = useState<
+    { id: string; seat: string; name: string; status: RepushRowStatus | 'pending' }[]
+  >([]);
+  const [paused, setPaused] = useState(false);
+  const [errorText, setErrorText] = useState('');
+  const [changedCount, setChangedCount] = useState<number | null>(null);
+
+  const running = phase === 'running';
+
+  const handleSync = async () => {
+    setPhase('running');
+    setErrorText('');
+    setPaused(false);
+    setStatusText('Saving business info...');
+
+    // 1. Persist the business fields to crm_agencies.
+    const { data: savedAgency, error: saveError } = await supabase
+      .from('crm_agencies')
+      .update({
+        business_name: businessName.trim() || null,
+        business_logo_url: businessLogoUrl.trim() || null,
+        agency_url_prefix: urlPrefix.trim() || null,
+        calendar_embed_code: calendarEmbed.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', agency.id)
+      .select()
+      .maybeSingle();
+
+    if (saveError || !savedAgency) {
+      setErrorText('Failed to save business info. Nothing was pushed.');
+      setPhase('form');
+      return;
+    }
+    onAgencyUpdated(savedAgency as CrmAgency);
+
+    // 2. Regenerate hidden derived fields on every roster row for this agency.
+    setStatusText('Regenerating roster booking links...');
+    const { allRows, changedRowIds } = await regenerateAgencyRosterHiddenFields(
+      agency.name,
+      urlPrefix.trim(),
+      calendarEmbed.trim(),
+    );
+    setChangedCount(changedRowIds.size);
+
+    if (allRows.length === 0) {
+      setStatusText('');
+      setProgress({ sent: 0, failed: 0, total: 0 });
+      setPhase('done');
+      return;
+    }
+
+    // 3. Determine which rows to repush to GHL.
+    const isPopulated = (r: RosterRepushRow) => !!r.row_data['First Name']?.trim();
+    const candidates = allRows
+      .filter(isPopulated)
+      .filter((r) => resyncAll || changedRowIds.has(r.id));
+
+    const readout = candidates.map((r) => ({
+      id: r.id,
+      seat: r.row_data['Seat Number'] || '',
+      name: `${r.row_data['First Name'] || ''} ${r.row_data['Last Name'] || ''}`.trim(),
+      status: 'pending' as RepushRowStatus | 'pending',
+    }));
+    setRowReadout(readout);
+
+    if (candidates.length === 0) {
+      setStatusText('No populated seats needed a resync.');
+      setProgress({ sent: 0, failed: 0, total: 0 });
+      setPhase('done');
+      return;
+    }
+
+    // 4. Repush via the shared warmup + throttle + retry helper.
+    setStatusText('Pushing updated seats to GHL...');
+    setProgress({ sent: 0, failed: 0, total: candidates.length });
+
+    const result = await pushRosterRowsToGhl(agency.name, candidates, {
+      onProgress: (p) => setProgress(p),
+      onRowResult: (rowId, status) =>
+        setRowReadout((prev) => prev.map((r) => (r.id === rowId ? { ...r, status } : r))),
+    });
+
+    if (result.paused) {
+      setPaused(true);
+      setStatusText('Zaps are paused for this agency — roster fields were updated but nothing was pushed to GHL.');
+    } else {
+      setStatusText('');
+    }
+    setPhase('done');
+  };
+
+  const pct = progress.total > 0
+    ? Math.round(((progress.sent + progress.failed) / progress.total) * 100)
+    : 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={running ? undefined : onClose}>
+      <div
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Repeat2 className="w-4 h-4 text-amber-600" />
+            <h3 className="text-base font-semibold text-gray-900">Sync Business Info to Roster</h3>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={running}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
+          >
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Saves these fields to the agency, then regenerates each roster seat's hidden
+            Digital Business Card links and calendar embed and repushes affected seats to GHL
+            so the roster's "Send to Zap" fires correct info.
+          </p>
+
+          {agency.zaps_paused && (
+            <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <ZapOff className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span>Zaps are paused for this agency. Roster fields will be updated, but nothing will be pushed to GHL until zaps are re-enabled.</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Business Name</label>
+            <input
+              type="text"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              disabled={running}
+              placeholder="Wisechoice Insurance"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none disabled:bg-gray-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Business Logo URL</label>
+            <input
+              type="url"
+              value={businessLogoUrl}
+              onChange={(e) => setBusinessLogoUrl(e.target.value)}
+              disabled={running}
+              placeholder="https://..."
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none disabled:bg-gray-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Agency URL Prefix</label>
+            <input
+              type="text"
+              value={urlPrefix}
+              onChange={(e) => setUrlPrefix(e.target.value)}
+              disabled={running}
+              placeholder="wisechoice"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none disabled:bg-gray-50"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Builds each seat's links: <span className="font-mono">{'{prefix}'}.my-agent-appt.com/r{'{seat}'}-click-to-schedule</span>
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Calendar Embed Code</label>
+            <textarea
+              value={calendarEmbed}
+              onChange={(e) => setCalendarEmbed(e.target.value)}
+              disabled={running}
+              placeholder="<iframe src=&quot;...&quot;></iframe>"
+              rows={3}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none resize-none font-mono disabled:bg-gray-50"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={resyncAll}
+              onChange={(e) => setResyncAll(e.target.checked)}
+              disabled={running}
+              className="rounded border-gray-300 text-navy-600 focus:ring-navy-500"
+            />
+            Resync all seats (not just changed ones)
+          </label>
+
+          {(running || phase === 'done') && (
+            <div className="space-y-3 pt-2 border-t border-gray-100">
+              {statusText && <p className="text-sm text-gray-700">{statusText}</p>}
+
+              {changedCount !== null && (
+                <p className="text-xs text-gray-500">
+                  {changedCount} seat{changedCount === 1 ? '' : 's'} had changed hidden fields.
+                </p>
+              )}
+
+              {progress.total > 0 && (
+                <div>
+                  <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5">
+                    <span>Pushing {progress.sent + progress.failed} of {progress.total}...</span>
+                    <span className="tabular-nums font-medium">{pct}%</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500 ease-out"
+                      style={{
+                        width: `${pct}%`,
+                        background: progress.failed > 0
+                          ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
+                          : 'linear-gradient(90deg, #f59e0b, #22c55e)',
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-4 mt-1.5 text-xs">
+                    <span className="text-green-600 font-medium">{progress.sent} sent</span>
+                    {progress.failed > 0 && (
+                      <span className="text-red-600 font-medium">{progress.failed} failed</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {rowReadout.length > 0 && (
+                <div className="max-h-40 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-50">
+                  {rowReadout.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                      <span className="text-gray-700">
+                        Seat #{r.seat}{r.name ? ` — ${r.name}` : ''}
+                      </span>
+                      <span
+                        className={
+                          r.status === 'success'
+                            ? 'text-green-600 font-medium'
+                            : r.status === 'failed'
+                            ? 'text-red-600 font-medium'
+                            : 'text-gray-400'
+                        }
+                      >
+                        {r.status === 'success' ? 'Sent' : r.status === 'failed' ? 'Failed' : 'Pending'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {paused && (
+                <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <ZapOff className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                  <span>Zaps paused — roster fields were updated but no GHL push occurred.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {errorText && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{errorText}</p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+          <button
+            onClick={onClose}
+            disabled={running}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40"
+          >
+            {phase === 'done' ? 'Close' : 'Cancel'}
+          </button>
+          {phase !== 'done' && (
+            <button
+              onClick={handleSync}
+              disabled={running}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-500 rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+            >
+              {running ? (
+                'Syncing...'
+              ) : (
+                <>
+                  <Repeat2 className="w-4 h-4" />
+                  Save &amp; Sync
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
