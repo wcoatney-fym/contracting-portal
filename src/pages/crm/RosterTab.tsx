@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { parseCSV } from '../../lib/csvParser';
-import { fireCrmOnboardingWebhook, warmUpCrmOnboardingWebhook } from '../../lib/webhooks';
+import { fireCrmOnboardingWebhook } from '../../lib/webhooks';
+import { pushRosterRowsToGhl } from '../../lib/rosterRepush';
 import { AgencyRosterCard } from '../../components/AgencyRosterCard';
 import { normalizeRosterRows } from '../../lib/rosterNormalizer';
 
@@ -745,120 +746,33 @@ const RosterTableView: React.FC<RosterTableViewProps> = ({
     setZapSending(true);
     setZapResult(null);
 
-    const { data: agencyData } = await supabase
-      .from('crm_agencies')
-      .select('zaps_paused')
-      .eq('name', upload.agency)
-      .maybeSingle();
-
-    if (agencyData?.zaps_paused) {
-      setZapSending(false);
-      setZapResult({ sent: 0, failed: 0, total: populatedRows.length });
-      return;
-    }
-
     const total = populatedRows.length;
     setZapProgress({ sent: 0, total, failed: 0 });
 
-    // Warm up the edge function to eliminate cold start issues
-    await warmUpCrmOnboardingWebhook();
-    await new Promise((r) => setTimeout(r, 1500));
-
-    let sent = 0;
-    let failed = 0;
-    const failedRows: typeof populatedRows = [];
-
-    for (const row of populatedRows) {
-      const success = await fireCrmOnboardingWebhook({
-        seatNumber: row.row_data['Seat Number'] || '',
-        agentNpn: row.row_data['Agent NPN'] || '',
-        firstName: row.row_data['First Name'] || '',
-        lastName: row.row_data['Last Name'] || '',
-        email: row.row_data['Email'] || '',
-        phone: row.row_data['Phone'] || '',
-        profileImage: row.row_data['All Templates | Agent Profile Image'] || '',
-        crmNumber: row.row_data['All Templates | Agent CRM #'] || '',
-        agency: upload.agency,
-        digitalBusinessCardUrl: row.row_data['Digital Business Card Home Page'] || '',
-        confirmationPageUrl: row.row_data['Appt Booked Confirmation Page'] || '',
-        calendarEmbedCode: row.row_data['Calendar Embed Code'] || '',
-      });
-
-      if (success) {
-        sent++;
-      } else {
-        failed++;
-        failedRows.push(row);
-      }
-      setZapProgress({ sent, total, failed });
-
-      await new Promise((r) => setTimeout(r, 3000));
-    }
-
-    // Retry failed rows once with a longer delay
-    if (failedRows.length > 0) {
-      await new Promise((r) => setTimeout(r, 5000));
-      for (const row of failedRows) {
-        const success = await fireCrmOnboardingWebhook({
-          seatNumber: row.row_data['Seat Number'] || '',
-          agentNpn: row.row_data['Agent NPN'] || '',
-          firstName: row.row_data['First Name'] || '',
-          lastName: row.row_data['Last Name'] || '',
-          email: row.row_data['Email'] || '',
-          phone: row.row_data['Phone'] || '',
-          profileImage: row.row_data['All Templates | Agent Profile Image'] || '',
-          crmNumber: row.row_data['All Templates | Agent CRM #'] || '',
-          agency: upload.agency,
-          digitalBusinessCardUrl: row.row_data['Digital Business Card Home Page'] || '',
-          confirmationPageUrl: row.row_data['Appt Booked Confirmation Page'] || '',
-          calendarEmbedCode: row.row_data['Calendar Embed Code'] || '',
-        });
-
-        if (success) {
-          sent++;
-          failed--;
-          setZapProgress({ sent, total, failed });
-        }
-
-        await new Promise((r) => setTimeout(r, 5000));
-      }
-    }
+    const result = await pushRosterRowsToGhl(upload.agency, populatedRows, {
+      onProgress: ({ sent, failed, total: t }) => setZapProgress({ sent, failed, total: t }),
+    });
 
     setZapSending(false);
-    setZapResult({ sent, failed, total });
+    if (result.paused) {
+      setZapResult({ sent: 0, failed: 0, total });
+      return;
+    }
+    setZapResult({ sent: result.sent, failed: result.failed, total: result.total });
   };
 
   const handleFireRowToZap = async (row: RosterRow) => {
     setRowZapSending(row.id);
 
-    const { data: agencyData } = await supabase
-      .from('crm_agencies')
-      .select('zaps_paused')
-      .eq('name', upload.agency)
-      .maybeSingle();
+    // Single-row fire: skip warmup/throttle, reuse shared payload + paused guard.
+    const result = await pushRosterRowsToGhl(upload.agency, [row], { skipWarmup: true });
 
-    if (agencyData?.zaps_paused) {
+    if (result.paused) {
       setRowZapResults((prev) => ({ ...prev, [row.id]: 'paused' }));
-      setRowZapSending(null);
-      return;
+    } else {
+      const status = result.rowResults[row.id] === 'success' ? 'success' : 'failed';
+      setRowZapResults((prev) => ({ ...prev, [row.id]: status }));
     }
-
-    const success = await fireCrmOnboardingWebhook({
-      seatNumber: row.row_data['Seat Number'] || '',
-      agentNpn: row.row_data['Agent NPN'] || '',
-      firstName: row.row_data['First Name'] || '',
-      lastName: row.row_data['Last Name'] || '',
-      email: row.row_data['Email'] || '',
-      phone: row.row_data['Phone'] || '',
-      profileImage: row.row_data['All Templates | Agent Profile Image'] || '',
-      crmNumber: row.row_data['All Templates | Agent CRM #'] || '',
-      agency: upload.agency,
-      digitalBusinessCardUrl: row.row_data['Digital Business Card Home Page'] || '',
-      confirmationPageUrl: row.row_data['Appt Booked Confirmation Page'] || '',
-      calendarEmbedCode: row.row_data['Calendar Embed Code'] || '',
-    });
-
-    setRowZapResults((prev) => ({ ...prev, [row.id]: success ? 'success' : 'failed' }));
     setRowZapSending(null);
   };
 
