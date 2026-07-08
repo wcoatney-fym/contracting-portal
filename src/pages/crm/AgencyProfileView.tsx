@@ -87,6 +87,7 @@ export const AgencyProfileView: React.FC<AgencyProfileViewProps> = ({
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [ghlConfig, setGhlConfig] = useState<AgencyGhlConfig | null>(null);
   const [deals, setDeals] = useState<AgencyDeal[]>([]);
+  const [showBusinessInfoModal, setShowBusinessInfoModal] = useState(false);
   const [kpi, setKpi] = useState<AgencyKpi | null>(null);
   const [agentsOnboarded, setAgentsOnboarded] = useState(0);
   const [agentsInPipeline, setAgentsInPipeline] = useState(0);
@@ -233,6 +234,15 @@ export const AgencyProfileView: React.FC<AgencyProfileViewProps> = ({
             </span>
           )}
         </div>
+        <div className="ml-auto">
+          <button
+            onClick={() => setShowBusinessInfoModal(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-navy-600 bg-navy-600/5 border border-navy-600/15 rounded-lg hover:bg-navy-50 transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit Business Info
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 overflow-x-auto">
@@ -259,6 +269,168 @@ export const AgencyProfileView: React.FC<AgencyProfileViewProps> = ({
       )}
 
       {renderTab()}
+
+      {showBusinessInfoModal && (
+        <EditBusinessInfoModal
+          agency={agency}
+          onClose={() => setShowBusinessInfoModal(false)}
+          onAgencyUpdated={handleAgencyUpdated}
+        />
+      )}
+    </div>
+  );
+};
+
+const EditBusinessInfoModal: React.FC<{
+  agency: CrmAgency;
+  onClose: () => void;
+  onAgencyUpdated: (a: CrmAgency) => void;
+}> = ({ agency, onClose, onAgencyUpdated }) => {
+  const [businessName, setBusinessName] = useState(agency.business_name || '');
+  const [businessLogoUrl, setBusinessLogoUrl] = useState(agency.business_logo_url || '');
+  const [urlPrefix, setUrlPrefix] = useState(agency.agency_url_prefix || '');
+  const [calendarEmbed, setCalendarEmbed] = useState(agency.calendar_embed_code || '');
+  const [slug, setSlug] = useState(agency.slug || '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const { data, error } = await supabase
+      .from('crm_agencies')
+      .update({
+        business_name: businessName.trim() || null,
+        business_logo_url: businessLogoUrl.trim() || null,
+        agency_url_prefix: urlPrefix.trim() || null,
+        calendar_embed_code: calendarEmbed.trim() || null,
+        slug: slug.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', agency.id)
+      .select()
+      .maybeSingle();
+    setSaving(false);
+
+    if (!error && data) {
+      onAgencyUpdated(data as CrmAgency);
+      setSaved(true);
+      setTimeout(() => onClose(), 600);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Settings className="w-4 h-4 text-navy-600" />
+            <h3 className="text-base font-semibold text-gray-900">Edit Business Info</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Portal Slug</label>
+            <input
+              type="text"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="dh-insurance"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none"
+            />
+            <p className="text-xs text-gray-400 mt-1">Used in the portal login URL</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Business Name</label>
+            <input
+              type="text"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              placeholder="Wisechoice Insurance"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Business Logo URL</label>
+            <input
+              type="url"
+              value={businessLogoUrl}
+              onChange={(e) => setBusinessLogoUrl(e.target.value)}
+              placeholder="https://..."
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none"
+            />
+            {businessLogoUrl && (
+              <div className="mt-2 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                <img
+                  src={businessLogoUrl}
+                  alt="Logo preview"
+                  className="h-8 object-contain"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Agency URL Prefix</label>
+            <input
+              type="url"
+              value={urlPrefix}
+              onChange={(e) => setUrlPrefix(e.target.value)}
+              placeholder="https://book.agency.com/"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none"
+            />
+            <p className="text-xs text-gray-400 mt-1">Prefixed to agent booking links in the portal</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Calendar Embed Code</label>
+            <textarea
+              value={calendarEmbed}
+              onChange={(e) => setCalendarEmbed(e.target.value)}
+              placeholder="<iframe src=&quot;...&quot;></iframe>"
+              rows={3}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-navy-600/20 focus:border-navy-600 outline-none resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || saved}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50"
+          >
+            {saved ? (
+              <>
+                <Check className="w-4 h-4" />
+                Saved
+              </>
+            ) : saving ? (
+              'Saving...'
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
