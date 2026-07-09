@@ -10,7 +10,7 @@ const navItems = [
   { to: '/agent-database', icon: Database, label: 'Agent Database' },
   { to: '/agent-pipeline', icon: Workflow, label: 'Agent Pipeline' },
   { to: '/hierarchy', icon: GitBranch, label: 'Hierarchy' },
-  { to: '/crm-team', icon: Building2, label: 'CRM Team' },
+  // CRM Team tab migrated to FYM Command — removed from portal nav.
 ];
 
 const breadcrumbMap: Record<string, string> = {
@@ -20,7 +20,7 @@ const breadcrumbMap: Record<string, string> = {
   '/agent-database': 'Agent Database',
   '/agent-pipeline': 'Agent Pipeline',
   '/hierarchy': 'Hierarchy',
-  '/crm-team': 'CRM Team',
+  // '/crm-team': removed — now lives in FYM Command.
 };
 
 export const Layout: React.FC = () => {

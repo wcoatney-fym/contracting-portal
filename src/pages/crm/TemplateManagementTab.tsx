@@ -1,3 +1,10 @@
+/**
+ * @crm-team-protected
+ *
+ * DO NOT standardize agency names or apply crosswalk logic in this file.
+ * DO NOT reference cc_agency_crosswalk or cleanDisplayName here.
+ * CRM Team tab subtab — owns its own naming; see CrmTeam.tsx for context.
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Download, Trash2, FileSpreadsheet, Plus, X, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';

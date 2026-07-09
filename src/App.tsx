@@ -8,7 +8,9 @@ import { AgentIntake } from './pages/AgentIntake';
 import { AgentTracking } from './pages/AgentTracking';
 import { AgentDatabase } from './pages/AgentDatabase';
 import { AgentPipeline } from './pages/AgentPipeline';
-import { CrmTeam } from './pages/CrmTeam';
+// CRM Team tab migrated to FYM Command (OpenClaw-Dashboard). Files remain
+// @crm-team-protected but the route is removed from this portal.
+// import { CrmTeam } from './pages/CrmTeam';
 import { Hierarchy } from './pages/Hierarchy';
 import { LifeOnly } from './pages/forms/LifeOnly';
 import { Field } from './pages/forms/Field';
@@ -24,7 +26,7 @@ import { AlertCircle } from 'lucide-react';
 
 const KNOWN_PATHS = new Set([
   '', 'dashboard', 'agent-intake', 'new-hires', 'populate-form', 'populate',
-  'agent-tracking', 'agent-database', 'agent-pipeline', 'hierarchy', 'crm-team', 'crm',
+  'agent-tracking', 'agent-database', 'agent-pipeline', 'hierarchy',
   'fym-agent-resources',
 ]);
 
@@ -134,8 +136,7 @@ const ProtectedApp: React.FC = () => {
         <Route path="agent-database" element={<AgentDatabase />} />
         <Route path="agent-pipeline" element={<AgentPipeline />} />
         <Route path="hierarchy" element={<Hierarchy />} />
-        <Route path="crm-team" element={<CrmTeam />} />
-        <Route path="crm" element={<CrmTeam />} />
+        {/* CRM Team tab moved to FYM Command. Routes preserved as redirect stubs until migration is complete. */}
       </Route>
     </Routes>
   );
