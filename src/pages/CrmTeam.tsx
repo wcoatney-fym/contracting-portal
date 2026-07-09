@@ -1,3 +1,15 @@
+/**
+ * @crm-team-protected
+ *
+ * DO NOT standardize agency names or apply crosswalk logic in this file.
+ * DO NOT reference cc_agency_crosswalk or cleanDisplayName here.
+ * DO NOT rename agencies displayed here — suffixes like (IFG) and (YFMO)
+ * distinguish separate CRM instances / payment types and are intentional.
+ *
+ * This tab is CRM Team-only (password-gated). Its agency naming is owned by
+ * the CRM Team and must remain independent of the canonical display layer.
+ * When this functionality moves to FYM Command, carry this marker with it.
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw,
