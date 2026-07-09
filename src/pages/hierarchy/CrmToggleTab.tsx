@@ -1,3 +1,11 @@
+/**
+ * @crm-team-protected
+ *
+ * DO NOT standardize agency names or apply crosswalk logic in this file.
+ * DO NOT reference cc_agency_crosswalk or cleanDisplayName here.
+ * CRM toggle in Hierarchy view — reads crm_agencies directly; naming is
+ * CRM Team-owned. See CrmTeam.tsx for the full protection rationale.
+ */
 import React, { useState, useEffect } from 'react';
 import { Monitor, AlertTriangle, CheckCircle2, Circle, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
