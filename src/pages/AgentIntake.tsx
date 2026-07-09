@@ -173,7 +173,7 @@ export const AgentIntake: React.FC = () => {
 
   const generateFormUrl = (formType: string, agentId: string) => {
     const configuredUrl = import.meta.env.VITE_APP_URL;
-    const baseUrl = configuredUrl || window.location.origin;
+    const baseUrl = (configuredUrl || window.location.origin).replace(/\/+$/, '');
     const typeMap: Record<string, string> = {
       'Life Only': '/life',
       'Field': '/field',
