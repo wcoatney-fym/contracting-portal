@@ -179,7 +179,7 @@ Deno.serve(async (req: Request) => {
       outcome: "received",
     });
 
-    const baseUrl = appUrl || "https://fym-agents.bolt.host";
+    const baseUrl = (appUrl || "https://contracting.teamfym.com").replace(/\/+$/, '');
 
     const directAutoSend = !!(formType && FORM_ROUTE_MAP[formType]);
 
