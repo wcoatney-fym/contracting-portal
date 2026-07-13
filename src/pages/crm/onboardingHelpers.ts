@@ -87,7 +87,7 @@ export async function handleUndoStep(
     await deleteDbaData(agency.name);
     await deleteRosterData(agency.name);
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         csr_confirmed: false,
         roster_confirmed: false,
@@ -114,7 +114,7 @@ export async function handleUndoStep(
     await deleteDbaData(agency.name);
     await deleteRosterData(agency.name);
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         roster_confirmed: false,
         dba_confirmed: false,
@@ -139,7 +139,7 @@ export async function handleUndoStep(
     await deleteDbaData(agency.name);
     await deleteRosterData(agency.name);
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         roster_confirmed: false,
         dba_confirmed: false,
@@ -155,7 +155,7 @@ export async function handleUndoStep(
   } else if (stepIdx === 3) {
     await deleteDbaData(agency.name);
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         dba_confirmed: false,
         onboarding_status: 'awaiting_dba_upload',

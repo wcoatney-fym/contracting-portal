@@ -88,9 +88,9 @@ export const KpiDashboardTab: React.FC<KpiDashboardTabProps> = ({ onNavigate }) 
 
   const loadData = async () => {
     const [agencyRes, kpiRes, notifRes, pipelineRes, ghlRes, ticketRes, cancelRes] = await Promise.all([
-      supabase.from('crm_agencies').select('*').eq('crm_enabled', true).order('name'),
+      supabase.from('hierarchy_agencies').select('*').eq('crm_enabled', true).order('name'),
       supabase.from('agency_kpis').select('*').order('computed_at', { ascending: false }),
-      supabase.from('crm_notifications').select('*, crm_agencies(name)').order('created_at', { ascending: false }).limit(15),
+      supabase.from('crm_notifications').select('*, hierarchy_agencies(name)').order('created_at', { ascending: false }).limit(15),
       supabase.from('crm_pipeline').select('agency, stage'),
       supabase.from('agency_ghl_configs').select('agency_id, connection_status'),
       supabase.from('crm_tickets').select('id', { count: 'exact', head: true }).eq('status', 'open'),
@@ -439,9 +439,9 @@ export const KpiDashboardTab: React.FC<KpiDashboardTabProps> = ({ onNavigate }) 
                       <BarChart3 className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      {(notif as any).crm_agencies?.name && (
+                      {(notif as any).hierarchy_agencies?.name && (
                         <span className="inline-block text-[11px] font-semibold bg-navy-100 text-navy-700 px-1.5 py-0.5 rounded mb-1">
-                          {(notif as any).crm_agencies.name}
+                          {(notif as any).hierarchy_agencies.name}
                         </span>
                       )}
                       <p className={`text-sm ${notif.is_read ? 'text-steel-500' : 'text-steel-900 font-medium'}`}>

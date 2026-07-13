@@ -152,7 +152,7 @@ export const PipelineTab: React.FC = () => {
   const loadRecords = useCallback(async () => {
     const [pipelineRes, agencyRes] = await Promise.all([
       supabase.from('crm_pipeline').select('*').order('created_at', { ascending: false }),
-      supabase.from('crm_agencies').select('name').eq('is_active', true).order('name'),
+      supabase.from('hierarchy_agencies').select('name').eq('is_active', true).order('name'),
     ]);
     setRecords(pipelineRes.data || []);
     setAgencyNames((agencyRes.data || []).map((a: { name: string }) => a.name));

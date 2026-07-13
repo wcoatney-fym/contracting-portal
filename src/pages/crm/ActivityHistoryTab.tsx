@@ -57,11 +57,11 @@ export const ActivityHistoryTab: React.FC = () => {
     setLoading(true);
 
     const [agencyRes, notifRes, rosterRes, dbaRes, cancelRes] = await Promise.all([
-      supabase.from('crm_agencies').select('id, name').order('name'),
-      supabase.from('crm_notifications').select('id, agency_id, type, message, created_at, crm_agencies(name)').order('created_at', { ascending: false }),
+      supabase.from('hierarchy_agencies').select('id, name').order('name'),
+      supabase.from('crm_notifications').select('id, agency_id, type, message, created_at, hierarchy_agencies(name)').order('created_at', { ascending: false }),
       supabase.from('crm_roster_uploads').select('id, agency, file_name, row_count, uploaded_at').order('uploaded_at', { ascending: false }),
       supabase.from('crm_dba_uploads').select('id, agency, file_name, row_count, uploaded_at').order('uploaded_at', { ascending: false }),
-      supabase.from('agency_cancellation_uploads').select('id, agency_id, file_name, row_count, status, created_at, confirmed_at, crm_agencies(name)').order('created_at', { ascending: false }),
+      supabase.from('agency_cancellation_uploads').select('id, agency_id, file_name, row_count, status, created_at, confirmed_at, hierarchy_agencies(name)').order('created_at', { ascending: false }),
     ]);
 
     const agenciesList: AgencyOption[] = (agencyRes.data || []).map((a: any) => ({ id: a.id, name: a.name }));
@@ -72,7 +72,7 @@ export const ActivityHistoryTab: React.FC = () => {
     const unified: HistoryEvent[] = [];
 
     for (const n of notifRes.data || []) {
-      const agencyName = (n as any).crm_agencies?.name || agencyMap.get(n.agency_id) || 'Unknown';
+      const agencyName = (n as any).hierarchy_agencies?.name || agencyMap.get(n.agency_id) || 'Unknown';
       unified.push({
         id: `notif-${n.id}`,
         date: n.created_at,
@@ -109,7 +109,7 @@ export const ActivityHistoryTab: React.FC = () => {
     }
 
     for (const c of cancelRes.data || []) {
-      const agencyName = (c as any).crm_agencies?.name || agencyMap.get(c.agency_id) || 'Unknown';
+      const agencyName = (c as any).hierarchy_agencies?.name || agencyMap.get(c.agency_id) || 'Unknown';
       const statusDesc = c.status === 'success' ? 'Confirmed' : c.status === 'rejected' ? 'Rejected' : 'Pending';
       unified.push({
         id: `cancel-${c.id}`,

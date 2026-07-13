@@ -43,7 +43,7 @@ export const TestingTab: React.FC = () => {
   const loadTestAgency = async () => {
     setLoading(true);
     const { data } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .select('*')
       .eq('is_test', true)
       .limit(1)
@@ -61,7 +61,7 @@ export const TestingTab: React.FC = () => {
     const slug = generateSlug(name);
     const portalPassword = `${name}CRMPortal!`;
     const { data } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .insert({
         name,
         is_test: true,
@@ -100,7 +100,7 @@ export const TestingTab: React.FC = () => {
     await deleteRosterData(agency.name);
     await supabase.from('crm_pipeline').delete().eq('agency', agency.name);
     await supabase.from('agents').delete().eq('agency', agency.name);
-    await supabase.from('crm_agencies').delete().eq('id', agency.id);
+    await supabase.from('hierarchy_agencies').delete().eq('id', agency.id);
     setAgency(null);
     setDeleting(false);
     setShowDelete(false);

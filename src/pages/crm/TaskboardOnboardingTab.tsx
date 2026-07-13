@@ -28,7 +28,7 @@ export const TaskboardOnboardingTab: React.FC = () => {
   const load = async () => {
     const [agencyRes, notifRes] = await Promise.all([
       supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('*')
         .neq('onboarding_status', 'onboarding_complete')
         .eq('is_active', true)

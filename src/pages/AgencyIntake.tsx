@@ -10,7 +10,7 @@ import type { CrmAgency } from '../lib/supabase';
  * Route: /agency-intake  (no login gate -- handed to the contracting team as a link).
  * Mirrors the "Add New Agency" modal fields. On submit it writes a `pending`
  * row into `agency_intake_submissions` (anon INSERT only, per RLS). It never
- * touches `crm_agencies` -- a CRM admin approves the submission from the
+ * touches `hierarchy_agencies` -- a CRM admin approves the submission from the
  * Hierarchy tab, which is what creates the real agency record.
  */
 export const AgencyIntake: React.FC = () => {
@@ -34,7 +34,7 @@ export const AgencyIntake: React.FC = () => {
   useEffect(() => {
     const loadMainAgencies = async () => {
       const { data } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('id, name')
         .eq('agency_type', 'main')
         .eq('is_active', true)

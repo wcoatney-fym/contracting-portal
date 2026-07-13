@@ -156,7 +156,7 @@ export const PortalCancellationsTab: React.FC<PortalCancellationsTabProps> = ({ 
     if (agency.agency_type === 'main') {
       setLoadingAgencies(true);
       supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('id, name')
         .eq('parent_agency_id', agency.id)
         .eq('is_active', true)

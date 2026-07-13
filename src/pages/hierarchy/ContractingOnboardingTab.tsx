@@ -54,7 +54,7 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
     setEmailError('');
     setSaving(true);
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         agency_phone: form.agency_phone.trim() || null,
         business_name: form.business_name.trim() || null,
@@ -262,6 +262,31 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
           </div>
         </div>
       </div>
+
+      {/* UNL / Rolodex Reference Fields */}
+      {(agency.agency_state || agency.unl_writing_number || agency.unl_status) && (
+        <div className="border-t border-steel-200 pt-6">
+          <h4 className="font-semibold text-steel-900 text-sm mb-4">UNL Reference Data</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs text-steel-500">State</label>
+              <p className="text-sm font-medium text-steel-900">{agency.agency_state || '--'}</p>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-steel-500">UNL Writing Number</label>
+              <p className="text-sm font-medium text-steel-900 font-mono">{agency.unl_writing_number || '--'}</p>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-steel-500">UNL Status</label>
+              <p className={`text-sm font-medium ${
+                agency.unl_status === 'Active' ? 'text-emerald-700' :
+                agency.unl_status === 'Terminated' ? 'text-red-600' :
+                'text-amber-700'
+              }`}>{agency.unl_status || '--'}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Contracting Details Section */}
       <div className="border-t border-steel-200 pt-6">

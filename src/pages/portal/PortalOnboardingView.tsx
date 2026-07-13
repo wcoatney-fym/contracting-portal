@@ -454,7 +454,7 @@ const CsrForm: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }> =
     if (!isValid) return;
     setSaving(true);
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         assigned_csr: fullName,
         csr_first_name: firstName.trim(),
@@ -742,7 +742,7 @@ const RosterUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void>
 
       if (agency.roster_sent_back_reason) {
         await supabase
-          .from('crm_agencies')
+          .from('hierarchy_agencies')
           .update({ roster_sent_back_reason: null, updated_at: new Date().toISOString() })
           .eq('id', agency.id);
       }
@@ -961,7 +961,7 @@ const DbaUpload: React.FC<{ agency: CrmAgency; onRefresh: () => Promise<void> }>
 
       if (agency.dba_sent_back_reason) {
         await supabase
-          .from('crm_agencies')
+          .from('hierarchy_agencies')
           .update({ dba_sent_back_reason: null, updated_at: new Date().toISOString() })
           .eq('id', agency.id);
       }

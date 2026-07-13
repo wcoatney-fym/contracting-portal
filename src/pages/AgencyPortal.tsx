@@ -40,7 +40,7 @@ const PortalPasswordGate: React.FC<{
     setError('');
 
     const { data } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .select('portal_password')
       .eq('name', agencyName)
       .maybeSingle();
@@ -158,7 +158,7 @@ export const AgencyPortal: React.FC = () => {
   const fetchAgency = useCallback(async () => {
     if (!slug) return;
     const { data } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .select('*')
       .eq('slug', slug)
       .eq('is_active', true)
@@ -166,7 +166,7 @@ export const AgencyPortal: React.FC = () => {
     if (data) {
       setAgency(data);
       const { data: children } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('*')
         .eq('parent_agency_id', data.id)
         .eq('is_active', true)
@@ -186,7 +186,7 @@ export const AgencyPortal: React.FC = () => {
       }
 
       const { data } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('*')
         .eq('slug', slug)
         .eq('is_active', true)
@@ -198,7 +198,7 @@ export const AgencyPortal: React.FC = () => {
         setAgency(data);
 
         const { data: children } = await supabase
-          .from('crm_agencies')
+          .from('hierarchy_agencies')
           .select('*')
           .eq('parent_agency_id', data.id)
           .eq('is_active', true)

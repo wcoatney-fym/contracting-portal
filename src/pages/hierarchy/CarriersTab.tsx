@@ -21,7 +21,7 @@ export const CarriersTab: React.FC<CarriersTabProps> = ({ agency, onAgencyUpdate
       : [...current, carrier];
 
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ carriers: updated, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
 

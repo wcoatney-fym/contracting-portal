@@ -185,7 +185,7 @@ export async function pushRosterRowsToGhl(
   options: RepushOptions = {},
 ): Promise<RepushResult> {
   const { data: agencyData } = await supabase
-    .from('crm_agencies')
+    .from('hierarchy_agencies')
     .select('zaps_paused')
     .eq('name', agencyName)
     .maybeSingle();
