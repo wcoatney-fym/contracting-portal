@@ -55,7 +55,7 @@ const ProtectedApp: React.FC = () => {
 
     Promise.resolve(
       supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .select('slug')
       .eq('slug', potentialSlug)
       .eq('is_active', true)

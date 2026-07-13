@@ -137,7 +137,7 @@ const CsrEditForm: React.FC<{
     if (!isValid) return;
     setSaving(true);
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         assigned_csr: fullName,
         csr_first_name: firstName.trim(),

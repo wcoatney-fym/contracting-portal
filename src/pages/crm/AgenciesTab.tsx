@@ -53,7 +53,7 @@ export const AgenciesTab: React.FC = () => {
     }
 
     const [agencyRes, uploadsRes] = await Promise.all([
-      supabase.from('crm_agencies').select('*').eq('crm_enabled', true).order('name'),
+      supabase.from('hierarchy_agencies').select('*').eq('crm_enabled', true).order('name'),
       supabase.from('crm_roster_uploads').select('id, agency').order('uploaded_at', { ascending: false }),
     ]);
 
@@ -96,7 +96,7 @@ export const AgenciesTab: React.FC = () => {
   const toggleActive = async (agency: CrmAgency, e: React.MouseEvent) => {
     e.stopPropagation();
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ is_active: !agency.is_active, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
 
@@ -124,7 +124,7 @@ export const AgenciesTab: React.FC = () => {
     const fullName = `${csrForm.firstName.trim()} ${csrForm.lastName.trim()}`.trim();
     setCsrSaving(true);
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         assigned_csr: fullName || null,
         csr_first_name: csrForm.firstName.trim() || null,
@@ -166,7 +166,7 @@ export const AgenciesTab: React.FC = () => {
     setCrmSaving(true);
 
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ crm_number: num, updated_at: new Date().toISOString() })
       .eq('id', crmPanelAgency.id);
 

@@ -90,7 +90,7 @@ export const PortalAgentsTab: React.FC<PortalAgentsTabProps> = ({ agency, agency
       const targetAgencyName = terminateTarget.agencyName || agency.name;
 
       const { data: agencyData } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('csr_can_fill_seat, csr_first_name, csr_last_name, csr_phone, csr_email, csr_npn, csr_gender, zaps_paused')
         .eq('name', targetAgencyName)
         .maybeSingle();
@@ -472,7 +472,7 @@ const EditAgentModal: React.FC<{
 
       // Create a CRM work order so the CRM team can re-fire the onboarding Zap.
       const { data: agencyRecord } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('id')
         .eq('name', targetAgencyName)
         .maybeSingle();
@@ -735,7 +735,7 @@ const AddAgentModal: React.FC<{
       }
 
       const { data: agencyRecord } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('zaps_paused, is_alumni, calendar_embed_code, agency_url_prefix')
         .eq('name', selectedAgencyName)
         .maybeSingle();

@@ -285,7 +285,7 @@ export const AgentDatabase: React.FC = () => {
       }
 
       const { data: zapCheck } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('zaps_paused')
         .eq('name', agency)
         .maybeSingle();
@@ -461,7 +461,7 @@ export const AgentDatabase: React.FC = () => {
 
         if (matchingRow) {
           const { data: agencyData } = await supabase
-            .from('crm_agencies')
+            .from('hierarchy_agencies')
             .select('csr_can_fill_seat, csr_first_name, csr_last_name, csr_phone, csr_email, csr_npn, csr_gender, zaps_paused')
             .eq('name', agency)
             .maybeSingle();

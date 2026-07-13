@@ -66,7 +66,7 @@ export const Hierarchy: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     const [agencyRes, rosterRes, intakeRes] = await Promise.all([
-      supabase.from('crm_agencies').select('*').order('name'),
+      supabase.from('hierarchy_agencies').select('*').order('name'),
       supabase.from('crm_roster_uploads').select('agency, row_count').order('uploaded_at', { ascending: false }),
       supabase.from('agency_intake_submissions').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
     ]);
@@ -156,7 +156,7 @@ export const Hierarchy: React.FC = () => {
     const portalPassword = `${name}CRMPortal!`;
 
     const { data, error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .insert({
         name,
         agency_type: 'sub',
@@ -195,9 +195,11 @@ export const Hierarchy: React.FC = () => {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const portalPassword = `${name}CRMPortal!`;
 
+    // Upsert on slug: if the agency was pre-seeded from the rolodex, intake data wins
+    // and overwrites the stub fields (NPN, EIN, principal agent, emails, etc.).
     const { data, error } = await supabase
-      .from('crm_agencies')
-      .insert({
+      .from('hierarchy_agencies')
+      .upsert({
         name,
         agency_type: parentId ? 'sub' : 'main',
         parent_agency_id: parentId,
@@ -213,16 +215,12 @@ export const Hierarchy: React.FC = () => {
         principal_agent_npn: submission.principal_agent_npn?.trim() || null,
         contracting_email: submission.contracting_email?.trim() || null,
         contracting_contact: submission.contracting_contact?.trim() || null,
-      })
+      }, { onConflict: 'slug' })
       .select()
       .maybeSingle();
 
     if (error || !data) {
-      setIntakeError(
-        error?.code === '23505'
-          ? `An agency named "${name}" already exists. Reject this intake or rename before approving.`
-          : error?.message || 'Failed to create agency from intake.'
-      );
+      setIntakeError(error?.message || 'Failed to create agency from intake.');
       setProcessingIntakeId(null);
       return;
     }
@@ -264,7 +262,7 @@ export const Hierarchy: React.FC = () => {
     setDeleting(true);
     await ensureSession();
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .delete()
       .eq('id', deleteTarget.id);
 

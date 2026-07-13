@@ -72,7 +72,7 @@ export const HierarchyRosterTab: React.FC<HierarchyRosterTabProps> = ({ agency }
       }
 
       const { data: agencyRecord } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('crm_number, csr_npn, calendar_embed_code, agency_url_prefix')
         .eq('name', agency.name)
         .maybeSingle();

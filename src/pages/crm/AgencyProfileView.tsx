@@ -319,7 +319,7 @@ const EditBusinessInfoModal: React.FC<{
   const handleSave = async () => {
     setSaving(true);
     const { data, error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         business_name: businessName.trim() || null,
         business_logo_url: businessLogoUrl.trim() || null,
@@ -486,9 +486,9 @@ const SyncBusinessInfoModal: React.FC<{
     setPaused(false);
     setStatusText('Saving business info...');
 
-    // 1. Persist the business fields to crm_agencies.
+    // 1. Persist the business fields to hierarchy_agencies.
     const { data: savedAgency, error: saveError } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         business_name: businessName.trim() || null,
         business_logo_url: businessLogoUrl.trim() || null,
@@ -775,7 +775,7 @@ const ZapsPausedBanner: React.FC<{
   const handleEnable = async () => {
     setEnabling(true);
     const { data, error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ zaps_paused: false })
       .eq('id', agency.id)
       .select()
@@ -1001,7 +1001,7 @@ const EditableDateCreatedRow: React.FC<{ agency: CrmAgency; onAgencyUpdated: (a:
   const handleSave = async () => {
     if (!value) return;
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ date_created: value, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
     if (!error) {
@@ -1049,7 +1049,7 @@ const EditableDbaClientCountRow: React.FC<{ agency: CrmAgency; onAgencyUpdated: 
     const parsed = parseInt(value, 10);
     if (isNaN(parsed) || parsed < 0) return;
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ dba_client_count: parsed, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
     if (!error) {
@@ -1109,7 +1109,7 @@ const PortalSettingsCard: React.FC<{
     if (!password.trim()) return;
     setSaving(true);
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ portal_password: password.trim(), updated_at: new Date().toISOString() })
       .eq('id', agency.id);
 
@@ -1360,7 +1360,7 @@ const BackfillRow: React.FC<{
     }
 
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update(updates)
       .eq('id', agency.id);
 
@@ -1514,7 +1514,7 @@ const AgencyCrossSellAdminCard: React.FC<{
 
     const now = new Date().toISOString();
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ cross_sell_confirmed: true, updated_at: now })
       .eq('id', agency.id);
 
@@ -1533,7 +1533,7 @@ const AgencyCrossSellAdminCard: React.FC<{
     setResultMessage(null);
 
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ cross_sell_confirmed: false, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
 
@@ -1637,7 +1637,7 @@ const PortalTabToggles: React.FC<{
       : [...hiddenTabs, tabKey];
 
     const { error } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ portal_hidden_tabs: updated, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
 

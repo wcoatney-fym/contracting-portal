@@ -73,7 +73,7 @@ export const AgencyOnboardingView: React.FC<AgencyOnboardingViewProps> = ({
 
   const refreshAgency = async () => {
     const { data } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .select('*')
       .eq('id', agency.id)
       .maybeSingle();
@@ -389,7 +389,7 @@ const TestStepControls: React.FC<{
     else confirmFlags.dba_confirmed = false;
 
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         onboarding_status: newStatus,
         ...confirmFlags,
@@ -470,7 +470,7 @@ const CsrStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
     if (!isFormValid) return;
     setSaving(true);
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         assigned_csr: fullName,
         csr_first_name: firstName.trim(),
@@ -489,7 +489,7 @@ const CsrStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
     setConfirming(true);
     const now = new Date().toISOString();
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         csr_confirmed: true,
         onboarding_status: 'awaiting_agency_phone',
@@ -671,7 +671,7 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
     if (!phoneValue.trim()) return;
     setSaving('phone');
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         agency_phone: phoneValue.trim(),
         crm_number: phoneValue.trim(),
@@ -686,7 +686,7 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
     setSaving(key);
     const newValue = !agency[key];
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ [key]: newValue, updated_at: new Date().toISOString() })
       .eq('id', agency.id);
     await onRefresh();
@@ -697,7 +697,7 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
     if (!calendarEmbed.trim() || !urlPrefix.trim()) return;
     setSaving('calendar_url');
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         calendar_embed_code: calendarEmbed.trim(),
         agency_url_prefix: urlPrefix.trim(),
@@ -713,7 +713,7 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
     if (!businessLogoUrl.trim() && !logoUnavailable) return;
     setSaving('business_details');
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         business_name: businessName.trim(),
         business_logo_url: logoUnavailable ? '' : businessLogoUrl.trim(),
@@ -729,7 +729,7 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
     setConfirming(true);
     const now = new Date().toISOString();
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         agency_phone: phoneValue.trim(),
         crm_number: phoneValue.trim(),
@@ -1013,7 +1013,7 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
                       } else {
                         setCrossSellConfirmed(false);
                         supabase
-                          .from('crm_agencies')
+                          .from('hierarchy_agencies')
                           .update({ cross_sell_confirmed: false, updated_at: new Date().toISOString() })
                           .eq('id', agency.id)
                           .then(() => onRefresh());
@@ -1114,7 +1114,7 @@ const PhoneSetupStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = (
             }
 
             await supabase
-              .from('crm_agencies')
+              .from('hierarchy_agencies')
               .update({ cross_sell_confirmed: true, updated_at: new Date().toISOString() })
               .eq('id', agency.id);
 
@@ -1153,7 +1153,7 @@ const RosterStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ ag
     setZapResult(null);
 
     const { data: agencyData } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .select('zaps_paused')
       .eq('name', agency.name)
       .maybeSingle();
@@ -1298,7 +1298,7 @@ const RosterStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ ag
     }
     const now = new Date().toISOString();
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         roster_confirmed: false,
         roster_sent_back_reason: sendBackReason.trim(),
@@ -1400,7 +1400,7 @@ const RosterStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ ag
 
       if (agency.roster_sent_back_reason) {
         await supabase
-          .from('crm_agencies')
+          .from('hierarchy_agencies')
           .update({ roster_sent_back_reason: null, updated_at: new Date().toISOString() })
           .eq('id', agency.id);
       }
@@ -1419,7 +1419,7 @@ const RosterStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ ag
     const now = new Date().toISOString();
 
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ roster_confirmed: true, onboarding_status: 'awaiting_dba_upload', updated_at: now })
       .eq('id', agency.id);
 
@@ -1775,7 +1775,7 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
     setConfirming(true);
     const now = new Date().toISOString();
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({ dba_confirmed: true, onboarding_status: 'onboarding_complete', updated_at: now })
       .eq('id', agency.id);
     await supabase
@@ -1872,7 +1872,7 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
 
       if (agency.dba_sent_back_reason) {
         await supabase
-          .from('crm_agencies')
+          .from('hierarchy_agencies')
           .update({ dba_sent_back_reason: null, updated_at: new Date().toISOString() })
           .eq('id', agency.id);
       }
@@ -1890,7 +1890,7 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
     setConfirming(true);
     const now = new Date().toISOString();
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         dba_confirmed: true,
         onboarding_status: 'onboarding_complete',
@@ -1946,7 +1946,7 @@ const DbaStep: React.FC<{ agency: CrmAgency; onRefresh: () => void }> = ({ agenc
     }
     const now = new Date().toISOString();
     await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .update({
         dba_confirmed: false,
         dba_sent_back_reason: sendBackReason.trim(),

@@ -91,14 +91,14 @@ export const TaskboardCurrentTab: React.FC = () => {
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from('crm_tickets')
-      .select('*, crm_agencies!inner(name)')
+      .select('*, hierarchy_agencies!inner(name)')
       .in('status', ['open', 'in-progress', 'resolved'])
       .order('created_at', { ascending: false });
 
     const mapped: TicketWithAgency[] = (data || []).map((row: any) => ({
       ...row,
-      agency_name: row.crm_agencies?.name || 'Unknown',
-      crm_agencies: undefined,
+      agency_name: row.hierarchy_agencies?.name || 'Unknown',
+      hierarchy_agencies: undefined,
     }));
     setTickets(mapped);
     setLoading(false);
@@ -211,7 +211,7 @@ const SpecialistChangeRequestsSection: React.FC = () => {
   const loadRequests = useCallback(async () => {
     const { data } = await supabase
       .from('specialist_change_requests')
-      .select('*, crm_agencies!inner(name)')
+      .select('*, hierarchy_agencies!inner(name)')
       .in('status', ['pending', 'calendar_added'])
       .order('created_at', { ascending: false });
 
@@ -227,7 +227,7 @@ const SpecialistChangeRequestsSection: React.FC = () => {
       mapped.push({
         id: row.id,
         agency_id: row.agency_id,
-        agency_name: (row as any).crm_agencies?.name || 'Unknown',
+        agency_name: (row as any).hierarchy_agencies?.name || 'Unknown',
         product_number: row.product_number,
         product_name: productData?.product_name || `Product #${row.product_number}`,
         requested_full_name: row.requested_full_name,
@@ -374,14 +374,14 @@ const CancellationApprovalsSection: React.FC = () => {
   const loadPending = useCallback(async () => {
     const { data } = await supabase
       .from('agency_cancellation_uploads')
-      .select('id, agency_id, file_name, row_count, created_at, crm_agencies!inner(name)')
+      .select('id, agency_id, file_name, row_count, created_at, hierarchy_agencies!inner(name)')
       .eq('status', 'pending_approval')
       .order('created_at', { ascending: false });
 
     const mapped: PendingCancellationUpload[] = (data || []).map((row: any) => ({
       id: row.id,
       agency_id: row.agency_id,
-      agency_name: row.crm_agencies?.name || 'Unknown',
+      agency_name: row.hierarchy_agencies?.name || 'Unknown',
       file_name: row.file_name,
       row_count: row.row_count,
       created_at: row.created_at,
@@ -653,7 +653,7 @@ const TicketCard: React.FC<{
     }
 
     const { data: agencyData } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .select('zaps_paused')
       .eq('name', ticket.agency_name)
       .maybeSingle();

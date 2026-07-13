@@ -21,7 +21,7 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
   useEffect(() => {
     const loadMainAgencies = async () => {
       const { data } = await supabase
-        .from('crm_agencies')
+        .from('hierarchy_agencies')
         .select('*')
         .eq('agency_type', 'main')
         .eq('is_active', true)
@@ -69,7 +69,7 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
     const portalPassword = `${trimmedName}CRMPortal!`;
 
     const { data: newAgency, error: insertError } = await supabase
-      .from('crm_agencies')
+      .from('hierarchy_agencies')
       .insert({
         name: trimmedName,
         onboarding_status: existingAgency ? 'onboarding_complete' : 'pending_csr_assignment',
