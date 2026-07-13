@@ -1,0 +1,127 @@
+/*
+  # Fix: re-seed hierarchy agencies with correct parent_agency_id
+
+  Migration 20260713210002 attempted to insert 96 agencies with
+  agency_type = 'sub' and parent_agency_id = NULL. The constraint
+  crm_agencies_parent_type_check rejects sub-agencies without a parent,
+  so the entire seed was silently rolled back — leaving the Hierarchy
+  view empty after PR #27 merged.
+
+  This migration re-runs the full seed, resolving parent_agency_id
+  to FYM's actual UUID at insert time via subquery. All 96 agencies
+  sit directly under FYM Financial, LLC (Top MGA = 202JVV00) per the
+  UNL hierarchy file.
+
+  Idempotent: ON CONFLICT (slug) DO NOTHING — safe to re-run.
+*/
+
+INSERT INTO public.hierarchy_agencies
+  (name, slug, contracting_email, agency_state, unl_writing_number, unl_status,
+   agency_type, parent_agency_id, onboarding_status, is_active, crm_enabled, date_created)
+SELECT
+  v.name, v.slug, v.contracting_email, v.agency_state, v.unl_writing_number, v.unl_status,
+  'sub',
+  (SELECT id FROM public.hierarchy_agencies WHERE name = 'FYM' LIMIT 1),
+  'pending_csr_assignment',
+  true,
+  false,
+  CURRENT_DATE
+FROM (VALUES
+  ('369 Insurance Inc',                    '369-insurance',                      'nick@vlachoscpa.com',                          'CO', '202NPK00', 'Pending'),
+  ('ACA Agent LLC',                         'aca-agent',                          'lspinner@acaagent.com',                        'FL', '202NLM00', 'Active'),
+  ('Agility Health Group LLC',              'agility-health-group',               'contractingteam@agilityhg.com',                'GA', '202KTH00', 'Pending'),
+  ('Aidmed Insurance LLC',                  'aidmed-insurance',                   'tylerbayside@gmail.com',                       'FL', '202NL800', 'Active'),
+  ('Alfred Robinson',                       'alfred-robinson',                    'alfredus1964@gmail.com',                       'TN', '202JL300', 'Pending'),
+  ('Almond Family Insurance LLC',           'almond-family-insurance',            'joe@almond-insurance.com',                     'IL', '202NBF00', 'Active'),
+  ('American Entitlements LLC',             'american-entitlements',              'brian.tobias@americanentitlements.com',         'TX', '202NDY00', 'Active'),
+  ('American Senior Health And Life LLC',   'american-senior-health-and-life',    'americanseniorhealthandlife@gmail.com',         'FL', '202NDU00', 'Active'),
+  ('AP Insurance Partners',                 'ap-insurance-partners',              'aspinner13@icloud.com',                        'FL', '202NL700', 'Active'),
+  ('Archon Insurance Agency, LLC',          'archon-insurance-agency',            'martha.archon1@gmail.com',                     'TX', '202NJR00', 'Pending'),
+  ('Axia Senior Insurance Advisors',        'axia-senior-insurance-advisors',     'daniel@betterhealth.insure',                   'AZ', '202JCT00', 'Active'),
+  ('Better Insurance Management',           'better-insurance-management',        'bim204@gmail.com',                             'NJ', '202NF700', 'Pending'),
+  ('Blueprint Health Agency',               'blueprint-health-agency',            'kevin@blueprinthealthagency.com',              'FL', '202NG900', 'Active'),
+  ('Breelee-Cole, LLC',                     'breelee-cole',                       'dawnhebert01@yahoo.com',                       'LA', '202NF600', 'Pending'),
+  ('Brooks Automation Empire LLC',          'brooks-automation-empire',           'corporate@medicaregiants.com',                 'MD', '202NFL00', 'Active'),
+  ('Brown Networking Solutions',            'brown-networking-solutions',         'kimberlybrown843@gmail.com',                   'SC', '202JW200', 'Active'),
+  ('BWL Insurance II LLC',                  'bwl-insurance-ii',                   'ab@bwlinsurance.com',                          'FL', '202NHJ00', 'Active'),
+  ('Charthern Consulting',                  'charthern-consulting',               'insurancenow@charthernconsulting.com',         'GA', '202JRM00', 'Active'),
+  ('Clear Path Coverage',                   'clear-path-coverage',                'binh@clearpathcoverage.com',                   'CO', '202NNW00', 'Active'),
+  ('Clearview Health Advisors',             'clearview-health-advisors',          'ym@cvhealthins.com',                           'FL', '202BJN00', 'Active'),
+  ('Complete Care Solutions LC',            'complete-care-solutions-lc',         NULL,                                           'SC', '202BJM00', 'Pending'),
+  ('Crystal Coast Marketing Group',         'crystal-coast-marketing-group',      'willcrandell123@icloud.com',                   'NC', '202NG400', 'Active'),
+  ('Dawkins Agency',                        'dawkins-agency',                     'dawkinsinsurancegroup@gmail.com',              'SC', '202JMB00', 'Pending'),
+  ('DH Insurance Group',                    'dh-insurance-group',                 'bhcontracting@dhinsurancegroup.com',           'FL', '202NGA00', 'Active'),
+  ('Drivegen Media DBA Pro Health Partners','drivegen-media-dba-pro-health-partners','itzik@drivegenmedia.com',                   'FL', '202NGF00', 'Active'),
+  ('E&E Financial Solutions LLC',           'e-e-financial-solutions',            'eddiewhite2nd@gmail.com',                      'SC', '202A9V00', 'Active'),
+  ('East West Senior Solutions LLC',        'east-west-senior-solutions',         'ryan@ewssconsulting.com',                      'MD', '202NFP00', 'Active'),
+  ('EF Marshall Agency',                    'ef-marshall-agency',                 'marshall.eugene@gmail.com',                    'MD', '202NG700', 'Active'),
+  ('Elite Insurance Group Agency, LLC',     'elite-insurance-group-agency',       'hdavis@elite-insgroup.com',                    'GA', '202NKX00', 'Pending'),
+  ('Emery Insurance LLC',                   'emery-insurance',                    'brock@teameig.com',                            'UT', '202NN500', 'Terminated'),
+  ('Essential Health Affiliates LLC',       'essential-health-affiliates',        'alimehdi47@gmail.com',                         'TX', '202NGD00', 'Pending'),
+  ('Evercare Insurance Inc',                'evercare-insurance',                 'info@evercareins.ai',                          'FL', '202NLH00', 'Pending'),
+  ('Family Financial Consultants LLC',      'family-financial-consultants',       'donalddoejr@gmail.com',                        'GA', '202JPD00', 'Active'),
+  ('Family First Insurance Advisors LLC',   'family-first-insurance-advisors',    'steve@familyfirstia.com',                      'FL', '202NHK00', 'Active'),
+  ('Freedom Financial Consultants LLC',     'freedom-financial-consultants',      'ike@ffcse.com',                                'SC', '202JNZ00', 'Active'),
+  ('Gap Insurance Group LLC',               'gap-insurance-group',                'contracting@thegapinsurancegroup.com',         'FL', '202NM600', 'Active'),
+  ('Guardian Benefits Inc',                 'guardian-benefits',                  'customerservice@guardian-benefits.com',        'FL', '202NEW00', 'Active'),
+  ('Guide To Insure, LLC',                  'guide-to-insure',                    'mmarkland@atmapmf.com',                        'UT', '202NHS00', 'Active'),
+  ('Health Wise',                           'health-wise',                        'wscott2769@gmail.com',                         'FL', '202NPC00', 'Terminated'),
+  ('Healthcare123 Insurance Services, LLC', 'healthcare123-insurance-services',   'mike@healthcare123.com',                       'FL', '202NMJ00', 'Active'),
+  ('Highland Health Direct, LLC',           'highland-health-direct',             'daniel@highlandhealthdirect.com',              'FL', '202JZ200', 'Active'),
+  ('Insurance Sales Experts',               'insurance-sales-experts',            'joe@insurancesalesexperts.com',                'OH', '202NEP00', 'Active'),
+  ('Insure Choice',                         'insure-choice',                      'donna@insurechoicegroup.com',                  'TX', '202NM700', 'Active'),
+  ('Insure Health Now',                     'insure-health-now',                  'justin@insurehealthnow.com',                   'FL', '202NHH00', 'Active'),
+  ('Integrity Brokers LLC',                 'integrity-brokers',                  'millieperez70@gmail.com',                      'AZ', '202KRT00', 'Pending'),
+  ('JAR Insurance Services',               'jar-insurance-services',             'jarcorp@jaragent.com',                         'CA', '202NNK00', 'Pending'),
+  ('JTM Insurance & Financial Group LLC',   'jtm-insurance-financial-group',      'justinmatt@jtmif.com',                         'FL', '202NHR00', 'Active'),
+  ('KM&RM Solutions LLC',                   'km-rm-solutions',                    'kevin@yourseniorbenefitssolutions.com',        'GA', '202NMM00', 'Pending'),
+  ('Legacy Family Advisors',                'legacy-family-advisors',             'lenionjr@gmail.com',                           'GA', '202JLB00', 'Active'),
+  ('Local Heritage Benefits, LP',           'local-heritage-benefits',            'management@lhbenefits.com',                    'TX', '202JX600', 'Active'),
+  ('Longevity Capital Insurance, LLC',      'longevity-capital-insurance',        'gbruce@lcinsurancenow.com',                    'GA', '202KFZ00', 'Active'),
+  ('Magnolia Health Advisors',              'magnolia-health-advisors',           'terrence@magnoliahealthcare.com',              'FL', '202NPH00', 'Pending'),
+  ('Markham Financial Assurance',           'markham-financial-assurance',        'fmmarkham@gmail.com',                          'NC', '202DAX00', 'Active'),
+  ('Matthews Health Solutions LLC',         'matthews-health-solutions',          'matthewsjam1@aol.com',                         'MD', '202NG800', 'Active'),
+  ('McKenzie Real Holdings LLC',            'mckenzie-real-holdings',             'contracting@realseniormanagement.com',         'GA', '202NL900', 'Active'),
+  ('Med Advantage Advisors',                'med-advantage-advisors',             'contact@medadvantageadvisors.com',             'FL', '202NMD00', 'Active'),
+  ('Medicare Health Advisors',              'medicare-health-advisors',           'maxjaffy11@gmail.com',                         'FL', '202NCX00', 'Active'),
+  ('Medicare Medical Benefits LLC',         'medicare-medical-benefits',          'nikki@nikkicrouse.com',                        'AZ', '202JM200', 'Pending'),
+  ('Miranda Breaux LLC',                    'miranda-breaux',                     'mirandabreaux.insurance@gmail.com',            'LA', '202NF300', 'Pending'),
+  ('MyHealthAngel Insurance LLC',           'myhealthangel-insurance',            'insurance@myhealthangel.com',                  'FL', '202NEY00', 'Active'),
+  ('National Senior Benefit Advisors',      'national-senior-benefit-advisors',   'shaun.hunsaker@nsbagroup.com',                 'CA', '202NGZ00', 'Pending'),
+  ('National Underwriting Service LLC',     'national-underwriting-service',      'nick@fexcontracting.com',                      'PA', '202NFD00', 'Pending'),
+  ('NFG Insurance Solutions Inc',           'nfg-insurance-solutions',            'primeoasisd@gmail.com',                        'FL', '202NM500', 'Active'),
+  ('Partners In Care Insurance LLC',        'partners-in-care-insurance',         'max@picinsurancegroup.com',                    'FL', '202NLR00', 'Active'),
+  ('Pitch Health Solutions LLC',            'pitch-health-solutions',             'shawn@pitchhealthsolutions.com',               'FL', '202NJF00', 'Active'),
+  ('Platinum Choice Healthcare LLC',        'platinum-choice-healthcare',         'admin@platinumchoicehealthcare.com',           'FL', '202NFY00', 'Active'),
+  ('Platinum Shield Insurance LLC',         'platinum-shield-insurance',          'contracting@platinumshield.com',               'IN', '202NFS00', 'Active'),
+  ('Providence Group',                      'providence-group',                   'drp@providence1818.com',                       'FL', '202NFQ00', 'Active'),
+  ('Residual Brothers LLC',                 'residual-brothers',                  'andy@residualbrothersllc.com',                 'OH', '202KEZ00', 'Active'),
+  ('Reviva Health Group LLC',               'reviva-health-group',                'revivahealthgroup@gmail.com',                  'FL', '202NNL00', 'Pending'),
+  ('Rhonda Ridgely Agency LLC',             'rhonda-ridgely-agency',              'rhonda@rhondaridgelyagency.com',               'VA', '202JPC00', 'Pending'),
+  ('RL Advisors',                           'rl-advisors',                        'joe@teampclub.com',                            'WI', '202KYC00', 'Active'),
+  ('Salud Network LLC',                     'salud-network',                      'jnaumann@saludnetwork.com',                    'AZ', '202AJA00', 'Pending'),
+  ('Savage Financial Group Inc',            'savage-financial-group',             'ess6546@aol.com',                              'FL', '202NKR00', 'Pending'),
+  ('Senior Benefits Agency LLC',            'senior-benefits-agency',             'joshua@seniorbenefitsagency.net',              'MA', '202NEG00', 'Active'),
+  ('Senior Health Advocates',               'senior-health-advocates',            'admin@seniorha.com',                           'FL', '202NFT00', 'Pending'),
+  ('Senior Market Consultants LLC',         'senior-market-consultants',          'rmoore.smcllc@gmail.com',                      'NC', '202NFA00', 'Active'),
+  ('Senior Market Insurance LLC',           'senior-market-insurance',            'rgean123@gmail.com',                           'AZ', '202JCS00', 'Pending'),
+  ('Senior Services Direct',               'senior-services-direct',             'contracting@seniorservicesdirect.com',         'AL', '202NE400', 'Active'),
+  ('Shore Legacy Insurance, LLC',           'shore-legacy-insurance',             'contact@shorelegacybenefits.com',              'FL', '202NP400', 'Pending'),
+  ('Signature Medicare Solutions',          'signature-medicare-solutions',       'brad@signaturemedicaresolutions.com',          'FL', '202NG100', 'Active'),
+  ('Silver Care Advisors, LLC',             'silver-care-advisors',               'agentcontracting@silverhealthadvisors.com',    'AZ', '202NNB00', 'Active'),
+  ('Steel City Financial Services Inc',     'steel-city-financial-services',      'dena@teamscf.com',                             'NC', '202GDY00', 'Active'),
+  ('TG Squared Asset Consultants LLC',      'tg-squared-asset-consultants',       'tgsquared.ac@gmail.com',                       'GA', '202KFE00', 'Pending'),
+  ('The Possibilities Group, LLC',          'the-possibilities-group',            'nekadoe@yahoo.com',                            'GA', '202BNR00', 'Terminated'),
+  ('The Premier Agency LLC',                'the-premier-agency',                 'j.heubach@premieragentnet.com',                'AZ', '202ACY00', 'Active'),
+  ('Thirteen Five, LLC',                    'thirteen-five',                      'mike@medicaremikeaz.com',                      'AZ', '202JTX00', 'Pending'),
+  ('Trucare Insurance Group Inc',           'trucare-insurance-group',            'bvanleer@trucareinsure.com',                   'NC', '202NJC00', 'Active'),
+  ('UBG Insurance LLC',                     'ubg-insurance',                      'ubginsurance4@gmail.com',                      'OH', '202NML00', 'Pending'),
+  ('Unified Growth Partners',              'unified-growth-partners',            'contracting@unifiedgrowthpartners.com',        'CA', '202NPT00', 'Pending'),
+  ('Valeir Insurance LLC',                  'valeir-insurance',                   'valeirinsurance@gmail.com',                    'AZ', '202KNM00', 'Active'),
+  ('Vargas Investment Enterprises LLC',     'vargas-investment-enterprises',      'andres@texasmedicalcareplans.com',             'TX', '202NJE00', 'Pending'),
+  ('Vivid Financial Services LLC',          'vivid-financial-services',           'melindalsi@yahoo.com',                         'SC', '202JMJ00', 'Active'),
+  ('Wealth Alliance Group',                 'wealth-alliance-group',              'nkbrown@wealthalliancegrp.com',                'SC', '202AYX00', 'Active'),
+  ('Wisechoice Senior Advisors, LLC',       'wisechoice-senior-advisors',         'chrisanning2@gmail.com',                       'KS', '202LAX00', 'Active'),
+  ('Yunicare Medical Solutions',            'yunicare-medical-solutions',         'valenzuelayunier8@gmail.com',                  'AZ', '202KPS00', 'Pending')
+) AS v(name, slug, contracting_email, agency_state, unl_writing_number, unl_status)
+ON CONFLICT (slug) DO NOTHING;
