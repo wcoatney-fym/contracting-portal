@@ -684,7 +684,7 @@ const AddAgentModal: React.FC<{
     try {
       const { data: upload } = await supabase
         .from('crm_roster_uploads')
-        .select('id')
+        .select('id, row_count')
         .eq('agency', selectedAgencyName)
         .order('uploaded_at', { ascending: false })
         .limit(1)
@@ -698,14 +698,31 @@ const AddAgentModal: React.FC<{
 
       const activeUploadId = upload.id;
 
-      const { data: allRows } = await supabase
+      const { data: allRows, error: rosterReadError } = await supabase
         .from('crm_roster')
         .select('id, row_data')
         .eq('upload_id', activeUploadId);
 
+      // Guard: if the read errored out, fail loudly rather than silently
+      // inserting a duplicate seat. This catches RLS/grant misconfigurations
+      // that cause a null/empty result even when rows exist.
+      if (rosterReadError) {
+        setError('Failed to read roster. Please try again or contact support.');
+        setSubmitting(false);
+        return;
+      }
+
       const numericRows = (allRows || []).filter(
         (r) => /^\d+$/.test(r.row_data['Seat Number'] || '')
       );
+
+      // Guard: if upload.row_count > 0 but we got 0 numericRows, something is
+      // wrong with our read access. Fail rather than creating a duplicate seat.
+      if (numericRows.length === 0 && (upload as any).row_count > 0) {
+        setError('Could not read roster seats. Please refresh and try again.');
+        setSubmitting(false);
+        return;
+      }
 
       const openSeat = numericRows
         .filter((r) => !r.row_data['First Name']?.trim() || r.row_data['CSR Placeholder'] === 'true')
@@ -744,7 +761,7 @@ const AddAgentModal: React.FC<{
         };
 
         const { error: updateError } = await supabase
-          .from('crm_roster')
+          .from('crm_roster')  
           .update({ row_data: updatedRowData })
           .eq('id', openSeat.id);
 
@@ -754,11 +771,14 @@ const AddAgentModal: React.FC<{
           return;
         }
       } else {
-        const maxSeat = numericRows.reduce(
-          (max, r) => Math.max(max, Number(r.row_data['Seat Number'])),
-          0
-        );
-        seatNumber = String(maxSeat + 1);
+        // All seats are occupied — extend the roster beyond the current max.
+        // Compute the next seat number that is not already present in the DB
+        // to prevent duplicates if this branch has been triggered before.
+        const occupiedSeats = new Set(numericRows.map((r) => Number(r.row_data['Seat Number'])));
+        let nextSeat = (numericRows.reduce((max, r) => Math.max(max, Number(r.row_data['Seat Number'])), 0)) + 1;
+        // Walk forward until we find a seat number that doesn't already exist
+        while (occupiedSeats.has(nextSeat)) nextSeat++;
+        seatNumber = String(nextSeat);
 
         const urlPrefix = agencyRecord?.agency_url_prefix?.trim() || '';
         const newRowData: Record<string, string> = {
