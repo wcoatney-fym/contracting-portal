@@ -17,9 +17,9 @@ const CARD_INFO = {
   lastName: 'Contracting',
   org: 'FYM Financial',
   title: 'Contracting Team',
-  phone: '(000) 000-0000', // ← swap in real GHL number
-  phoneRaw: '+10000000000',   // ← E.164 for vCard
-  email: 'Contracting@teamfym.com',
+  phone: '(816) 744-6742',
+  phoneRaw: '+18167446742',
+  email: 'contracting@teamfym.com',
   website: 'https://contracting.teamfym.com',
 } as const;
 
