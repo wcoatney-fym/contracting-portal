@@ -21,6 +21,7 @@ import { ThankYou } from './pages/ThankYou';
 import { FymAgentResources } from './pages/FymAgentResources';
 import { AgencyIntake } from './pages/AgencyIntake';
 import { ContractingCard } from './pages/ContractingCard';
+import { ContractingPortalView } from './pages/ContractingPortalView';
 import { AgencyPortal } from './pages/AgencyPortal';
 import { supabase } from './lib/supabase';
 import { AlertCircle } from 'lucide-react';
@@ -165,7 +166,7 @@ function App() {
           <Route path="/agency-intake" element={<AgencyIntake />} />
           <Route path="/contracting-card" element={<ContractingCard />} />
           {/* Contracting portal per agency — distinct from CRM portal at /:slug */}
-          <Route path="/agency/:slug" element={<AgencyPortal />} />
+          <Route path="/agency/:slug" element={<ContractingPortalView />} />
           <Route path="/*" element={<ProtectedApp />} />
         </Routes>
       </BrowserRouter>
