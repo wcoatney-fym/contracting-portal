@@ -229,9 +229,12 @@ interface AgencyIntakeAlertData {
   contracting_email: string;
   contracting_contact?: string | null;
   agency_npn: string;
+  agency_ein?: string | null;
   city?: string | null;
   state?: string | null;
   submitted_at?: string;
+  // Parent agency context — populated when submitted via a parent agency's invite link
+  invited_by_agency_name?: string | null;
 }
 
 export const fireAgencyIntakeAlert = async (data: AgencyIntakeAlertData): Promise<void> => {
