@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
     // Look up agency by GHL location (existing per-agency configs)
     const { data: config } = await supabase
       .from("agency_ghl_configs")
-      .select("agency_id, crm_agencies(id, name)")
+      .select("agency_id, hierarchy_agencies(id, name)")
       .eq("ghl_location_id", locationId)
       .maybeSingle();
 
@@ -110,7 +110,7 @@ Deno.serve(async (req: Request) => {
     const lastName = nameParts.slice(1).join(" ") || "";
 
     const agencyName =
-      config ? (config.crm_agencies as { id: string; name: string } | null)?.name || null : null;
+      config ? (config.hierarchy_agencies as { id: string; name: string } | null)?.name || null : null;
     const agencyId = config ? config.agency_id : null;
 
     // Check if the record already exists (for loop detection)
