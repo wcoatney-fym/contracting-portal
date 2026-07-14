@@ -2,6 +2,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const POPULATE_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/populate-form-webhook`;
+const AGENCY_INTAKE_ALERT_URL = `${SUPABASE_URL}/functions/v1/agency-intake-alert`;
 const SUBMISSION_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/form-submission-webhook`;
 const HIP_WRITING_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/hip-writing-webhook`;
 const CRM_ONBOARDING_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/crm-onboarding-webhook`;
@@ -221,6 +222,37 @@ interface CrossSellConfirmWebhookData {
   agencyUrlPrefix: string;
   products: CrossSellProduct[];
 }
+
+interface AgencyIntakeAlertData {
+  agency_name: string;
+  principal_agent: string;
+  contracting_email: string;
+  contracting_contact?: string | null;
+  agency_npn: string;
+  city?: string | null;
+  state?: string | null;
+  submitted_at?: string;
+}
+
+export const fireAgencyIntakeAlert = async (data: AgencyIntakeAlertData): Promise<void> => {
+  try {
+    const response = await fetch(AGENCY_INTAKE_ALERT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify(data),
+    });
+    if (response.ok) {
+      console.log('Agency intake alert sent');
+    } else {
+      console.error('Agency intake alert failed:', response.status, response.statusText);
+    }
+  } catch (error) {
+    console.error('Agency intake alert error:', error);
+  }
+};
 
 export const fireCrossSellConfirmWebhook = async (data: CrossSellConfirmWebhookData): Promise<boolean> => {
   try {
