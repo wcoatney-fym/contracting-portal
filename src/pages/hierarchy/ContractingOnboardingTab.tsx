@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Building2, Phone, Mail, Calendar, Globe, Save, Hash, User, AlertCircle, MapPin, Users, StickyNote, Plus, Trash2, Eye, EyeOff, Copy, Check as CheckIcon } from 'lucide-react';
+import { CheckCircle2, Circle, Building2, Phone, Mail, Calendar, Globe, Save, Hash, User, AlertCircle, MapPin, Users, StickyNote, Plus, Trash2, Eye, EyeOff, Copy, Check as CheckIcon, ExternalLink, Link2 } from 'lucide-react';
 import { supabase, US_STATES } from '../../lib/supabase';
 import type { CrmAgency, AgencyContact } from '../../lib/supabase';
 
@@ -285,27 +285,52 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
               <p className="text-sm font-medium text-steel-900">{agency.business_name || '--'}</p>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Contracting Portal Access */}
+      <div className="border-t border-steel-200 pt-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Link2 className="w-4 h-4 text-steel-400" />
+          <h4 className="font-semibold text-steel-900 text-sm">Contracting Portal Access</h4>
+        </div>
+        <div className="space-y-3">
+
+          {/* Portal URL */}
           <div className="space-y-1">
-            <label className="text-xs text-steel-500 flex items-center gap-1">
-              <Mail className="w-3 h-3" />
-              Portal Slug
-            </label>
-            <p className="text-sm font-medium text-steel-900">{agency.slug || '--'}</p>
+            <label className="text-xs text-steel-500">Portal URL</label>
+            {agency.slug ? (
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-steel-900 font-mono">
+                  contracting.teamfym.com/<span className="text-navy-700">{agency.slug}</span>
+                </p>
+                <a
+                  href={`${import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || 'https://contracting.teamfym.com'}/${agency.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1 text-steel-400 hover:text-navy-600 transition-colors"
+                  title="Open portal"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            ) : (
+              <p className="text-sm text-steel-400 italic">Not assigned</p>
+            )}
           </div>
+
+          {/* Portal Password */}
           <div className="space-y-1">
-            <label className="text-xs text-steel-500 flex items-center gap-1">
-              <Hash className="w-3 h-3" />
-              Portal Password
-            </label>
+            <label className="text-xs text-steel-500">Portal Password</label>
             {agency.portal_password ? (
               <div className="flex items-center gap-1.5">
-                <p className="text-sm font-medium text-steel-900 font-mono tracking-wide">
+                <p className="text-sm font-medium text-steel-900 font-mono tracking-wide select-all">
                   {showPassword ? agency.portal_password : '••••••••••••'}
                 </p>
                 <button
                   onClick={() => setShowPassword(v => !v)}
                   className="p-1 text-steel-400 hover:text-steel-600 transition-colors"
-                  title={showPassword ? 'Hide' : 'Show'}
+                  title={showPassword ? 'Hide password' : 'Reveal password'}
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -314,13 +339,16 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
                   className="p-1 text-steel-400 hover:text-navy-600 transition-colors"
                   title="Copy password"
                 >
-                  {passwordCopied ? <CheckIcon className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {passwordCopied
+                    ? <CheckIcon className="w-3.5 h-3.5 text-emerald-500" />
+                    : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
             ) : (
               <p className="text-sm text-steel-400 italic">Not set</p>
             )}
           </div>
+
         </div>
       </div>
 
