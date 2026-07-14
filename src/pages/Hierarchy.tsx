@@ -62,6 +62,9 @@ export const Hierarchy: React.FC = () => {
   const [pendingIntakes, setPendingIntakes] = useState<AgencyIntakeSubmission[]>([]);
   const [processingIntakeId, setProcessingIntakeId] = useState<string | null>(null);
   const [intakeError, setIntakeError] = useState('');
+  // Parent-selection step before approval
+  const [pendingApproval, setPendingApproval] = useState<AgencyIntakeSubmission | null>(null);
+  const [pendingApprovalParentId, setPendingApprovalParentId] = useState<string>('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -185,13 +188,22 @@ export const Hierarchy: React.FC = () => {
     return error?.message || null;
   };
 
+  // Step 1: open the parent-selection modal
+  const handleApproveIntakeClick = (submission: AgencyIntakeSubmission) => {
+    setPendingApproval(submission);
+    setPendingApprovalParentId('');
+    setIntakeError('');
+  };
+
+  // Step 2: called once internal team selects a parent and clicks "Approve & Create"
   const handleApproveIntake = async (submission: AgencyIntakeSubmission) => {
+    setPendingApproval(null);
     setProcessingIntakeId(submission.id);
     setIntakeError('');
     await ensureSession();
 
     const name = submission.agency_name.trim();
-    const parentId = submission.parent_agency_id;
+    const parentId = pendingApprovalParentId || null;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const portalPassword = `${name}CRMPortal!`;
 
@@ -202,7 +214,7 @@ export const Hierarchy: React.FC = () => {
       .upsert({
         name,
         agency_type: parentId ? 'sub' : 'main',
-        parent_agency_id: parentId,
+        parent_agency_id: parentId || null,
         onboarding_status: 'pending_csr_assignment',
         is_active: true,
         crm_enabled: false,
@@ -215,6 +227,11 @@ export const Hierarchy: React.FC = () => {
         principal_agent_npn: submission.principal_agent_npn?.trim() || null,
         contracting_email: submission.contracting_email?.trim() || null,
         contracting_contact: submission.contracting_contact?.trim() || null,
+        street_address: submission.street_address?.trim() || null,
+        city: submission.city?.trim() || null,
+        agency_state: submission.state?.trim() || null,
+        zip: submission.zip?.trim() || null,
+        additional_contacts: submission.additional_contacts ?? [],
       }, { onConflict: 'slug' })
       .select()
       .maybeSingle();
@@ -313,7 +330,7 @@ export const Hierarchy: React.FC = () => {
           submissions={pendingIntakes}
           processingId={processingIntakeId}
           error={intakeError}
-          onApprove={handleApproveIntake}
+          onApprove={handleApproveIntakeClick}
           onReject={handleRejectIntake}
         />
       )}
@@ -371,6 +388,17 @@ export const Hierarchy: React.FC = () => {
           deleting={deleting}
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {pendingApproval && (
+        <ApproveIntakeModal
+          submission={pendingApproval}
+          agencies={agencies}
+          parentId={pendingApprovalParentId}
+          onParentChange={setPendingApprovalParentId}
+          onConfirm={() => handleApproveIntake(pendingApproval)}
+          onCancel={() => setPendingApproval(null)}
         />
       )}
     </div>
@@ -605,10 +633,13 @@ const PendingIntakeTray: React.FC<{
                   <div className="min-w-0">
                     <p className="font-semibold text-steel-900 text-sm truncate">{s.agency_name}</p>
                     <p className="text-xs text-steel-500">
-                      {s.parent_agency_name ? `Parent: ${s.parent_agency_name}` : 'No parent (main agency)'}
+                      {s.invited_by_agency_name
+                        ? `Invited by: ${s.invited_by_agency_name}`
+                        : 'Direct intake'}
                       {' · '}
                       {new Date(s.created_at).toLocaleDateString()}
                     </p>
+                    <p className="text-xs text-steel-400 italic">Parent assigned during approval</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
@@ -637,12 +668,91 @@ const PendingIntakeTray: React.FC<{
                   <IntakeField label="Principal Agent NPN" value={s.principal_agent_npn} />
                   <IntakeField label="Contracting Email" value={s.contracting_email} />
                   <IntakeField label="Contracting Contact" value={s.contracting_contact || '—'} />
+                  {(s.street_address || s.city || s.state) && (
+                    <IntakeField
+                      label="Address"
+                      value={[s.street_address, s.city, s.state, s.zip].filter(Boolean).join(', ')}
+                    />
+                  )}
                 </div>
+                {(s.additional_contacts ?? []).length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-[10px] font-semibold text-steel-400 uppercase mb-1">Additional Contacts</p>
+                    <div className="space-y-1">
+                      {(s.additional_contacts ?? []).map((c, ci) => (
+                        <p key={ci} className="text-xs text-steel-600">
+                          <span className="font-medium">{c.name}</span>
+                          {c.title && ` · ${c.title}`}
+                          {c.department && ` (${c.department})`}
+                          {c.email && ` · ${c.email}`}
+                          {c.phone && ` · ${c.phone}`}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       )}
+    </div>
+  );
+};
+
+const ApproveIntakeModal: React.FC<{
+  submission: AgencyIntakeSubmission;
+  agencies: CrmAgency[];
+  parentId: string;
+  onParentChange: (id: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}> = ({ submission, agencies, parentId, onParentChange, onConfirm, onCancel }) => {
+  const sortedAgencies = [...agencies].sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-5 border-b border-steel-200">
+          <h3 className="text-lg font-bold text-steel-900">Approve Intake</h3>
+          <p className="text-sm text-steel-500 mt-0.5">
+            Assign a parent agency before creating{' '}
+            <span className="font-semibold">{submission.agency_name}</span>.
+          </p>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-steel-700 mb-1">
+              Parent Agency
+            </label>
+            <select
+              value={parentId}
+              onChange={(e) => onParentChange(e.target.value)}
+              className="w-full px-3 py-2 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent bg-white"
+            >
+              <option value="">Select a parent agency…</option>
+              {sortedAgencies.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-steel-400 mt-1">Required — every new agency must map to a parent.</p>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-steel-200 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-steel-600 bg-white border border-steel-300 rounded-lg hover:bg-steel-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!parentId}
+            className="px-4 py-2 text-sm font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50"
+          >
+            Approve &amp; Create
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Building2, Phone, Mail, Calendar, Globe, Save, Hash, User, AlertCircle } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import type { CrmAgency } from '../../lib/supabase';
+import { CheckCircle2, Circle, Building2, Phone, Mail, Calendar, Globe, Save, Hash, User, AlertCircle, MapPin, Users, StickyNote, Plus, Trash2 } from 'lucide-react';
+import { supabase, US_STATES } from '../../lib/supabase';
+import type { CrmAgency, AgencyContact } from '../../lib/supabase';
 
 interface ContractingOnboardingTabProps {
   agency: CrmAgency;
@@ -25,7 +25,15 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
     principal_agent_npn: agency.principal_agent_npn || '',
     contracting_email: agency.contracting_email || '',
     contracting_contact: agency.contracting_contact || '',
+    street_address: agency.street_address || '',
+    city: agency.city || '',
+    agency_state: agency.agency_state || '',
+    zip: agency.zip || '',
+    internal_notes: agency.internal_notes || '',
   });
+  const [additionalContacts, setAdditionalContacts] = useState<AgencyContact[]>(
+    agency.additional_contacts ?? []
+  );
 
   const isFym = agency.name.toLowerCase() === 'fym';
   const isRoot = agency.agency_type === 'main';
@@ -53,6 +61,7 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
     }
     setEmailError('');
     setSaving(true);
+    const cleanedContacts = additionalContacts.filter(c => c.name.trim());
     const { error } = await supabase
       .from('hierarchy_agencies')
       .update({
@@ -64,6 +73,12 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
         principal_agent_npn: form.principal_agent_npn.trim() || null,
         contracting_email: form.contracting_email.trim() || null,
         contracting_contact: form.contracting_contact.trim() || null,
+        street_address: form.street_address.trim() || null,
+        city: form.city.trim() || null,
+        agency_state: form.agency_state.trim() || null,
+        zip: form.zip.trim() || null,
+        additional_contacts: cleanedContacts,
+        internal_notes: form.internal_notes.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', agency.id);
@@ -79,7 +94,14 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
         principal_agent_npn: form.principal_agent_npn.trim() || null,
         contracting_email: form.contracting_email.trim() || null,
         contracting_contact: form.contracting_contact.trim() || null,
+        street_address: form.street_address.trim() || null,
+        city: form.city.trim() || null,
+        agency_state: form.agency_state.trim() || null,
+        zip: form.zip.trim() || null,
+        additional_contacts: cleanedContacts,
+        internal_notes: form.internal_notes.trim() || null,
       });
+      setAdditionalContacts(cleanedContacts);
       setEditing(false);
     }
     setSaving(false);
@@ -415,6 +437,146 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
             )}
           </div>
         </div>
+      </div>
+
+      {/* Address Section */}
+      <div className="border-t border-steel-200 pt-6">
+        <div className="flex items-center gap-2 mb-4">
+          <MapPin className="w-4 h-4 text-steel-400" />
+          <h4 className="font-semibold text-steel-900 text-sm">Agency Address</h4>
+        </div>
+        {editing ? (
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={form.street_address}
+              onChange={(e) => setForm(f => ({ ...f, street_address: e.target.value }))}
+              className="w-full px-3 py-1.5 text-sm border border-steel-300 rounded-md focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+              placeholder="Street Address"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="text"
+                value={form.city}
+                onChange={(e) => setForm(f => ({ ...f, city: e.target.value }))}
+                className="col-span-1 px-3 py-1.5 text-sm border border-steel-300 rounded-md focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                placeholder="City"
+              />
+              <select
+                value={form.agency_state}
+                onChange={(e) => setForm(f => ({ ...f, agency_state: e.target.value }))}
+                className="px-3 py-1.5 text-sm border border-steel-300 rounded-md focus:ring-2 focus:ring-navy-500 focus:border-transparent bg-white"
+              >
+                <option value="">State</option>
+                {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <input
+                type="text"
+                value={form.zip}
+                onChange={(e) => setForm(f => ({ ...f, zip: e.target.value }))}
+                className="px-3 py-1.5 text-sm border border-steel-300 rounded-md focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                placeholder="ZIP"
+                maxLength={10}
+              />
+            </div>
+          </div>
+        ) : (
+          <p className={`text-sm ${(agency.street_address || agency.city) ? 'text-steel-900' : 'text-steel-400 italic'}`}>
+            {[agency.street_address, agency.city, agency.agency_state, agency.zip].filter(Boolean).join(', ') || 'Not provided'}
+          </p>
+        )}
+      </div>
+
+      {/* Additional Contacts Section */}
+      <div className="border-t border-steel-200 pt-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-steel-400" />
+            <h4 className="font-semibold text-steel-900 text-sm">Additional Contacts</h4>
+          </div>
+          {editing && (
+            <button
+              type="button"
+              onClick={() => setAdditionalContacts(prev => [...prev, { name: '', title: '', department: '', email: '', phone: '' }])}
+              className="flex items-center gap-1 text-xs text-navy-600 hover:text-navy-700 font-medium"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add
+            </button>
+          )}
+        </div>
+
+        {!editing && (additionalContacts.length === 0) && (
+          <p className="text-sm text-steel-400 italic">No additional contacts on file.</p>
+        )}
+
+        {editing ? (
+          <div className="space-y-3">
+            {additionalContacts.length === 0 && (
+              <p className="text-xs text-steel-400 italic">No contacts — click Add above.</p>
+            )}
+            {additionalContacts.map((c, i) => (
+              <div key={i} className="relative border border-steel-200 rounded-lg p-3 bg-steel-50/50">
+                <button
+                  type="button"
+                  onClick={() => setAdditionalContacts(prev => prev.filter((_, idx) => idx !== i))}
+                  className="absolute top-2.5 right-2.5 text-steel-400 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <p className="text-[10px] font-semibold text-steel-400 uppercase mb-2">Contact {i + 1}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['name', 'title', 'department', 'email', 'phone'] as (keyof AgencyContact)[]).map(field => (
+                    <input
+                      key={field}
+                      type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
+                      value={c[field]}
+                      onChange={(e) => setAdditionalContacts(prev =>
+                        prev.map((ct, idx) => idx === i ? { ...ct, [field]: e.target.value } : ct)
+                      )}
+                      placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+                      className="px-2.5 py-1.5 text-xs border border-steel-300 rounded-md focus:ring-1 focus:ring-navy-500 focus:border-transparent"
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {additionalContacts.map((c, i) => (
+              <div key={i} className="text-sm">
+                <span className="font-medium text-steel-900">{c.name}</span>
+                {c.title && <span className="text-steel-500"> · {c.title}</span>}
+                {c.department && <span className="text-steel-400"> ({c.department})</span>}
+                {c.email && <span className="text-steel-500"> · {c.email}</span>}
+                {c.phone && <span className="text-steel-500"> · {c.phone}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Internal Notes Section */}
+      <div className="border-t border-steel-200 pt-6">
+        <div className="flex items-center gap-2 mb-4">
+          <StickyNote className="w-4 h-4 text-steel-400" />
+          <h4 className="font-semibold text-steel-900 text-sm">Internal Notes</h4>
+          <span className="text-[10px] font-semibold text-steel-400 uppercase bg-steel-100 px-1.5 py-0.5 rounded">CRM Team Only</span>
+        </div>
+        {editing ? (
+          <textarea
+            value={form.internal_notes}
+            onChange={(e) => setForm(f => ({ ...f, internal_notes: e.target.value }))}
+            rows={4}
+            className="w-full px-3 py-2 text-sm border border-steel-300 rounded-md focus:ring-2 focus:ring-navy-500 focus:border-transparent resize-none"
+            placeholder="Internal notes about this agency…"
+          />
+        ) : (
+          <p className={`text-sm whitespace-pre-wrap ${agency.internal_notes ? 'text-steel-900' : 'text-steel-400 italic'}`}>
+            {agency.internal_notes || 'No notes yet.'}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -88,6 +88,14 @@ export const HIP_CARRIERS = ['UNL', 'GTL'] as const;
 
 export const LINES_OF_BUSINESS = ['HIP'] as const;
 
+export type AgencyContact = {
+  name: string;
+  title: string;
+  department: string;
+  email: string;
+  phone: string;
+};
+
 export type CrmAgency = {
   id: string;
   name: string;
@@ -141,6 +149,11 @@ export type CrmAgency = {
   agency_state: string | null;
   unl_writing_number: string | null;
   unl_status: string | null;
+  street_address: string | null;
+  city: string | null;
+  zip: string | null;
+  additional_contacts: AgencyContact[];
+  internal_notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -363,19 +376,25 @@ export type CrmTicketMessage = {
 export type AgencyIntakeSubmission = {
   id: string;
   agency_name: string;
-  parent_agency_id: string | null;
-  parent_agency_name: string | null;
   agency_npn: string;
   agency_ein: string;
   principal_agent: string;
   principal_agent_npn: string;
   contracting_email: string;
   contracting_contact: string | null;
+  street_address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  additional_contacts: AgencyContact[];
   status: 'pending' | 'approved' | 'rejected';
   approved_agency_id: string | null;
   review_note: string | null;
   reviewed_at: string | null;
   created_at: string;
+  // Who sent the invitation (for sub-agency intake flow)
+  invited_by_agency_id: string | null;
+  invited_by_agency_name: string | null;
 };
 
 export const RESERVED_SLUGS = new Set([
