@@ -7,28 +7,30 @@
 
   Authoritative list of CRM-enabled agencies (confirmed by Charlie, 2026-07-14):
     - FYM
-    - DH Insurance Group
-    - Wisechoice              ← slug=wisechoice (NOT Wisechoice Senior Advisors, LLC)
+    - DH Insurance Group      ← "DH Insurance" in CRM
+    - Wisechoice Senior Advisors, LLC  ← "Wisechoice" in CRM (slug=wisechoice-senior-advisors)
     - Aspire
-    - MHA (IFG)               ← Medicare Health Advisors in GHL, IFG sub-account
-    - MHA (YFMO)              ← Medicare Health Advisors in GHL, YFMO sub-account
+    - MHA (IFG)               ← Medicare Health Advisors, IFG GHL sub-account
+    - MHA (YFMO)              ← Medicare Health Advisors, YFMO GHL sub-account
 
-  Note: "Wisechoice Senior Advisors, LLC" (slug=wisechoice-senior-advisors) is a
-  separate entity and NOT in CRM Ops — crm_enabled must be false on that row.
-
-  Note: "Medicare Health Advisors" (slug=medicare-health-advisors) is the UNL
-  rolodex entry. The two CRM rows are MHA (IFG) and MHA (YFMO) — those stay on.
+  Fuzzy match notes:
+    - "Wisechoice" in CRM Ops = "Wisechoice Senior Advisors, LLC" (slug=wisechoice-senior-advisors)
+      The plain "Wisechoice" row (slug=wisechoice) is a separate entity → crm_enabled=false.
+    - "DH Insurance" in CRM = "DH Insurance Group" in DB.
+    - "Medicare Health Advisors" (slug=medicare-health-advisors) is the UNL rolodex entry —
+      stays crm_enabled=false. The two CRM rows are MHA (IFG) and MHA (YFMO).
 
   This migration:
-  1. Disables crm_enabled on the 11 agencies incorrectly enabled by the guard migration.
+  1. Disables crm_enabled on the incorrectly enabled agencies (including plain 'wisechoice').
   2. Ensures the 6 correct agencies have crm_enabled=true.
   Idempotent.
 */
 
--- Step 1: Disable the 11 incorrectly enabled agencies
+-- Step 1: Disable all incorrectly enabled agencies
 UPDATE public.hierarchy_agencies
 SET crm_enabled = false
 WHERE slug IN (
+  'wisechoice',                         -- plain Wisechoice row; CRM uses wisechoice-senior-advisors
   'axia-senior-insurance-advisors',
   'bwl-insurance-ii',
   'guardian-benefits',
@@ -38,13 +40,16 @@ WHERE slug IN (
   'senior-services-direct',
   'silver-care-advisors',
   'the-premier-agency',
-  'wealth-alliance-group',
-  'wisechoice-senior-advisors'
+  'wealth-alliance-group'
 );
 
 -- Step 2: Ensure the 6 correct agencies are ON
--- (Using name match for FYM/Aspire/Wisechoice/MHA rows which have NULL slugs)
 UPDATE public.hierarchy_agencies
 SET crm_enabled = true
-WHERE slug IN ('dh-insurance-group', 'mha-ifg', 'mha-yfmo', 'wisechoice')
-   OR name IN ('FYM', 'Aspire');
+WHERE slug IN (
+  'dh-insurance-group',
+  'mha-ifg',
+  'mha-yfmo',
+  'wisechoice-senior-advisors'          -- "Wisechoice" in CRM Ops
+)
+OR name IN ('FYM', 'Aspire');
