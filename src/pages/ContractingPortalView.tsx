@@ -11,14 +11,17 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  Send,
   Copy,
   Check as CheckIcon,
   FileSpreadsheet,
   LogOut,
+  Clock,
+  Link as LinkIcon,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { CrmAgency } from '../lib/supabase';
+import type { CrmAgency, AgencyIntakeSubmission } from '../lib/supabase';
 import { parseCSV } from '../lib/csvParser';
 import { normalizeRosterRows, ROSTER_TEMPLATE_HEADERS, CANONICAL_ROSTER_HEADERS } from '../lib/rosterNormalizer';
 
@@ -38,16 +41,6 @@ import { normalizeRosterRows, ROSTER_TEMPLATE_HEADERS, CANONICAL_ROSTER_HEADERS 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = 'roster' | 'contracting' | 'crm';
-
-const FORM_TYPES = [
-  { value: 'hip', label: 'HIP', path: '/hip' },
-  { value: 'hip-career', label: 'HIP Career', path: '/hip-career' },
-  { value: 'hip-broker', label: 'HIP Broker', path: '/hip-broker' },
-  { value: 'life-only', label: 'Life Only', path: '/life' },
-  { value: 'field', label: 'Field', path: '/field' },
-  { value: 'direct-pay', label: 'Direct Pay (Telesales)', path: '/direct-pay' },
-  { value: 'telesales', label: 'Telesales', path: '/telesales' },
-];
 
 // ─── Password Gate ─────────────────────────────────────────────────────────────
 
@@ -379,65 +372,218 @@ const RosterTab: React.FC<{ agency: CrmAgency }> = ({ agency }) => {
 
 // ─── Contracting Links Tab ────────────────────────────────────────────────────
 
-const ContractingLinksTab: React.FC<{ agency: CrmAgency }> = ({ agency }) => {
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const baseUrl = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || window.location.origin;
+// ─── Status badge helper ─────────────────────────────────────────────────────
 
-  const copy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedKey(key);
-      setTimeout(() => setCopiedKey(null), 2000);
+const StatusBadge: React.FC<{ status: AgencyIntakeSubmission['status'] }> = ({ status }) => {
+  if (status === 'approved')
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700">
+        <CheckCircle2 className="w-3 h-3" />Approved
+      </span>
+    );
+  if (status === 'rejected')
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">
+        <X className="w-3 h-3" />Rejected
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">
+      <Clock className="w-3 h-3" />Pending
+    </span>
+  );
+};
+
+// ─── Contracting Links Tab ────────────────────────────────────────────────────
+
+const ContractingLinksTab: React.FC<{ agency: CrmAgency }> = ({ agency }) => {
+  const [copied, setCopied] = useState(false);
+  const [submissions, setSubmissions] = useState<AgencyIntakeSubmission[]>([]);
+  const [loadingSubs, setLoadingSubs] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const baseUrl = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || window.location.origin;
+  const inviteUrl = `${baseUrl}/agency-intake?from=${agency.id}&agency=${encodeURIComponent(agency.name)}`;
+
+  useEffect(() => {
+    supabase
+      .from('agency_intake_submissions')
+      .select('*')
+      .eq('invited_by_agency_id', agency.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setSubmissions((data ?? []) as AgencyIntakeSubmission[]);
+        setLoadingSubs(false);
+      });
+  }, [agency.id]);
+
+  const copyUrl = () => {
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     });
   };
+
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const pending = submissions.filter((s) => s.status === 'pending').length;
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-steel-900">Contracting Links</h2>
+        <h2 className="text-lg font-bold text-steel-900">Agency Contracting Link</h2>
         <p className="text-sm text-steel-500 mt-0.5">
-          Send these links to agents in your downline to start their contracting process.
-          Each form is tied to your agency.
+          Share this link with sub-agencies in your direct downline to start their contracting
+          process. Every submission through this link is tied to your agency.
         </p>
       </div>
 
-      <div className="bg-white rounded-xl border border-steel-200 divide-y divide-steel-100">
-        {FORM_TYPES.map((ft) => {
-          const url = `${baseUrl}${ft.path}?agency=${encodeURIComponent(agency.name)}`;
-          const key = ft.value;
-          return (
-            <div key={key} className="flex items-center justify-between gap-4 px-5 py-4">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-steel-900">{ft.label}</p>
-                <p className="text-xs text-steel-400 font-mono truncate mt-0.5">{url}</p>
-              </div>
-              <button
-                onClick={() => copy(url, key)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-steel-200 hover:border-navy-400 hover:text-navy-700 transition-colors flex-shrink-0"
-              >
-                {copiedKey === key ? (
-                  <>
-                    <CheckIcon className="w-3.5 h-3.5 text-emerald-500" />
-                    <span className="text-emerald-600">Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy
-                  </>
-                )}
-              </button>
-            </div>
-          );
-        })}
+      {/* Single invite link card */}
+      <div className="bg-white rounded-xl border border-steel-200 p-5">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-navy-50 flex items-center justify-center">
+            <LinkIcon className="w-4 h-4 text-navy-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-steel-900">Your Agency Intake Link</p>
+            <p className="text-xs text-steel-400">Send this to any agency contracting under you</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0 bg-steel-50 border border-steel-200 rounded-lg px-3 py-2.5">
+            <p className="text-xs font-mono text-steel-700 truncate">{inviteUrl}</p>
+          </div>
+          <button
+            onClick={copyUrl}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors flex-shrink-0 ${
+              copied
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-navy-700 text-white hover:bg-navy-800'
+            }`}
+          >
+            {copied ? (
+              <><CheckIcon className="w-4 h-4" />Copied!</>
+            ) : (
+              <><Copy className="w-4 h-4" />Copy Link</>
+            )}
+          </button>
+        </div>
       </div>
 
-      <div className="bg-steel-50 border border-steel-200 rounded-xl px-4 py-3 flex items-start gap-2.5">
-        <Send className="w-4 h-4 text-steel-400 mt-0.5 flex-shrink-0" />
-        <p className="text-xs text-steel-600">
-          Copy the link for the product your agent is contracting for and send it directly — via
-          text, email, or whatever your team uses. The form pre-fills your agency name so
-          contracting knows where each submission belongs.
-        </p>
+      {/* Submissions tracker */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-steel-900">
+            Sub-Agency Submissions
+            {pending > 0 && (
+              <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-200 text-amber-800">
+                {pending} pending
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-steel-400">{submissions.length} total</p>
+        </div>
+
+        {loadingSubs ? (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-navy-600" />
+          </div>
+        ) : submissions.length === 0 ? (
+          <div className="bg-white rounded-xl border border-steel-200 px-6 py-10 text-center">
+            <Users className="w-8 h-8 text-steel-300 mx-auto mb-3" />
+            <p className="text-sm text-steel-500">No sub-agencies have submitted yet.</p>
+            <p className="text-xs text-steel-400 mt-1">Share your link above to get started.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {submissions.map((s) => {
+              const isOpen = expanded.has(s.id);
+              return (
+                <div key={s.id} className="bg-white rounded-xl border border-steel-200 overflow-hidden">
+                  {/* Row header */}
+                  <button
+                    onClick={() => toggleExpand(s.id)}
+                    className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-steel-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-steel-900 truncate">{s.agency_name}</p>
+                        <p className="text-xs text-steel-400 mt-0.5">
+                          {new Date(s.created_at).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric', year: 'numeric',
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <StatusBadge status={s.status} />
+                      {isOpen
+                        ? <ChevronUp className="w-4 h-4 text-steel-400" />
+                        : <ChevronDown className="w-4 h-4 text-steel-400" />}
+                    </div>
+                  </button>
+
+                  {/* Expanded detail */}
+                  {isOpen && (
+                    <div className="px-4 pb-4 border-t border-steel-100">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mt-3 text-xs">
+                        {[
+                          ['Agency NPN', s.agency_npn],
+                          ['Agency EIN', s.agency_ein],
+                          ['Principal Agent', s.principal_agent],
+                          ['Principal NPN', s.principal_agent_npn],
+                          ['Contracting Email', s.contracting_email],
+                          s.contracting_contact ? ['Contracting Contact', s.contracting_contact] : null,
+                          (s.street_address || s.city || s.state)
+                            ? ['Address', [s.street_address, s.city, s.state, s.zip].filter(Boolean).join(', ')]
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .map((pair) => { const [label, value] = pair as [string, string]; return (
+                            <div key={label}>
+                              <p className="text-[10px] font-semibold text-steel-400 uppercase mb-0.5">{label}</p>
+                              <p className="text-steel-700">{value}</p>
+                            </div>
+                          ); })}
+                      </div>
+                      {(s.additional_contacts ?? []).length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-[10px] font-semibold text-steel-400 uppercase mb-1">Additional Contacts</p>
+                          <div className="space-y-1">
+                            {s.additional_contacts.map((c, ci) => (
+                              <p key={ci} className="text-xs text-steel-600">
+                                <span className="font-medium">{c.name}</span>
+                                {c.title && ` · ${c.title}`}
+                                {c.department && ` (${c.department})`}
+                                {c.email && ` · ${c.email}`}
+                                {c.phone && ` · ${c.phone}`}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {s.status === 'pending' && (
+                        <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          This submission is under review by the FYM contracting team.
+                        </p>
+                      )}
+                      {s.status === 'rejected' && s.review_note && (
+                        <p className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                          <span className="font-semibold">Note:</span> {s.review_note}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
