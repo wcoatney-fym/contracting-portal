@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Building2, Lock, ShieldCheck, BarChart3, Users, MessageSquareText, Headphones as HeadphonesIcon, LogOut, AlertCircle, BookOpen, Clock, Upload, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { CrmAgency } from '../lib/supabase';
@@ -133,10 +133,7 @@ const ComingSoonOverlay: React.FC = () => (
 
 export const AgencyPortal: React.FC = () => {
   const location = useLocation();
-  const params = useParams<{ slug?: string }>();
-  // Prefer the explicit :slug param from /agency/:slug route;
-  // fall back to legacy single-segment detection for backward compat.
-  const slug = params.slug ?? (location.pathname.replace(/^\//, '').split('/')[0] || null);
+  const slug = location.pathname.replace(/^\//, '').split('/')[0] || null;
   const [agency, setAgency] = useState<CrmAgency | null>(null);
   const [childAgencies, setChildAgencies] = useState<CrmAgency[]>([]);
   const [selectedAgencyIds, setSelectedAgencyIds] = useState<string[]>([]);
