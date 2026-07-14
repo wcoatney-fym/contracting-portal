@@ -20,6 +20,7 @@ import { HIP } from './pages/forms/HIP';
 import { ThankYou } from './pages/ThankYou';
 import { FymAgentResources } from './pages/FymAgentResources';
 import { AgencyIntake } from './pages/AgencyIntake';
+import { ContractingCard } from './pages/ContractingCard';
 import { AgencyPortal } from './pages/AgencyPortal';
 import { supabase } from './lib/supabase';
 import { AlertCircle } from 'lucide-react';
@@ -160,6 +161,7 @@ function App() {
           <Route path="/thank-you" element={<ThankYou />} />
           <Route path="/fym-agent-resources" element={<FymAgentResources />} />
           <Route path="/agency-intake" element={<AgencyIntake />} />
+          <Route path="/contracting-card" element={<ContractingCard />} />
           <Route path="/*" element={<ProtectedApp />} />
         </Routes>
       </BrowserRouter>
