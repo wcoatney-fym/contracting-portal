@@ -37,10 +37,6 @@ WHERE slug IN (
 )
 AND crm_enabled = false;
 
--- Safety: any agency that has onboarding_complete status and was managed
--- pre-rename should be CRM visible. Re-enable if somehow flipped off.
-UPDATE public.hierarchy_agencies
-SET crm_enabled = true
-WHERE onboarding_status = 'onboarding_complete'
-  AND is_active = true
-  AND crm_enabled = false;
+-- NOTE: The broad onboarding_complete re-enable was intentionally removed.
+-- crm_enabled must only be toggled by an explicit migration or the CRM toggle
+-- in the Hierarchy UI. See migration 20260714190000 for the authoritative list.
