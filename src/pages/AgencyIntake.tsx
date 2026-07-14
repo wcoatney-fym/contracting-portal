@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { supabase, US_STATES } from '../lib/supabase';
+import { fireAgencyIntakeAlert } from '../lib/webhooks';
 import type { AgencyContact } from '../lib/supabase';
 
 /**
@@ -118,6 +119,18 @@ export const AgencyIntake: React.FC = () => {
       setError(`Submission failed: ${insertError.message}`);
       return;
     }
+
+    // Fire alert email to Will, Charlie, and Nell — best-effort, non-blocking
+    fireAgencyIntakeAlert({
+      agency_name: agencyName,
+      principal_agent: form.principalAgent.trim(),
+      contracting_email: form.contractingEmail.trim(),
+      contracting_contact: form.contractingContact.trim() || null,
+      agency_npn: form.agencyNpn.trim(),
+      city: form.city.trim() || null,
+      state: form.state || null,
+      submitted_at: new Date().toISOString(),
+    });
 
     setSubmitted(true);
   };
