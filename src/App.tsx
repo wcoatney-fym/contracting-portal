@@ -29,6 +29,8 @@ const KNOWN_PATHS = new Set([
   '', 'dashboard', 'agent-intake', 'new-hires', 'populate-form', 'populate',
   'agent-tracking', 'agent-database', 'agent-pipeline', 'hierarchy',
   'fym-agent-resources',
+  // /agency/* is handled by an explicit route — don't treat 'agency' as a portal slug
+  'agency',
 ]);
 
 const ProtectedApp: React.FC = () => {
@@ -162,6 +164,8 @@ function App() {
           <Route path="/fym-agent-resources" element={<FymAgentResources />} />
           <Route path="/agency-intake" element={<AgencyIntake />} />
           <Route path="/contracting-card" element={<ContractingCard />} />
+          {/* Contracting portal per agency — distinct from CRM portal at /:slug */}
+          <Route path="/agency/:slug" element={<AgencyPortal />} />
           <Route path="/*" element={<ProtectedApp />} />
         </Routes>
       </BrowserRouter>
