@@ -302,14 +302,14 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
             {agency.slug ? (
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-steel-900 font-mono">
-                  contracting.teamfym.com/<span className="text-navy-700">{agency.slug}</span>
+                  contracting.teamfym.com/agency/<span className="text-navy-700">{agency.slug}</span>
                 </p>
                 <a
-                  href={`${import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || 'https://contracting.teamfym.com'}/${agency.slug}`}
+                  href={`${import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || 'https://contracting.teamfym.com'}/agency/${agency.slug}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1 text-steel-400 hover:text-navy-600 transition-colors"
-                  title="Open portal"
+                  title="Open contracting portal"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
