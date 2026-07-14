@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Search, UserPlus, UserX, X, AlertTriangle, Building2, Pencil } from 'lucide-react';
+import { Users, Search, UserPlus, UserX, X, AlertTriangle, Building2, Pencil, Send, Copy, Check as CheckIcon } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { fireCrmOnboardingWebhook } from '../../lib/webhooks';
 import type { CrmAgency } from '../../lib/supabase';
@@ -26,8 +26,22 @@ export const PortalAgentsTab: React.FC<PortalAgentsTabProps> = ({ agency, agency
   const [terminateTarget, setTerminateTarget] = useState<RosterAgent | null>(null);
   const [terminating, setTerminating] = useState(false);
   const [terminateError, setTerminateError] = useState('');
+  const [showInviteBanner, setShowInviteBanner] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const hasMultipleAgencies = agencyNames.length > 1;
+
+  const intakeInviteUrl = (() => {
+    const base = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || window.location.origin;
+    return `${base}/agency-intake?from=${agency.id}&agency=${encodeURIComponent(agency.name)}`;
+  })();
+
+  const handleCopyInviteLink = () => {
+    navigator.clipboard.writeText(intakeInviteUrl).then(() => {
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2500);
+    });
+  };
 
   const loadAgents = useCallback(async () => {
     const { data: uploads } = await supabase
@@ -237,6 +251,49 @@ export const PortalAgentsTab: React.FC<PortalAgentsTabProps> = ({ agency, agency
 
   return (
     <div className="space-y-5">
+
+      {/* ── Sub-Agency Invite ── */}
+      <div className="bg-navy-50 border border-navy-200 rounded-xl p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-navy-100 flex items-center justify-center flex-shrink-0">
+              <Send className="w-4 h-4 text-navy-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-navy-900">Invite a Sub-Agency to Contract</p>
+              <p className="text-xs text-navy-600 mt-0.5">
+                Send this link to an agency you want to bring into your downline. They fill out the intake form and our team handles setup.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowInviteBanner(v => !v)}
+            className="text-xs font-medium text-navy-700 hover:text-navy-900 flex-shrink-0"
+          >
+            {showInviteBanner ? 'Hide' : 'Get Link'}
+          </button>
+        </div>
+
+        {showInviteBanner && (
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={intakeInviteUrl}
+              className="flex-1 px-3 py-2 text-xs border border-navy-300 rounded-lg bg-white text-steel-700 font-mono focus:outline-none"
+              onFocus={(e) => e.target.select()}
+            />
+            <button
+              onClick={handleCopyInviteLink}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 transition-colors flex-shrink-0"
+            >
+              {inviteCopied ? <CheckIcon className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {inviteCopied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1 w-full sm:w-auto">
           <div className="relative flex-1 max-w-sm">
