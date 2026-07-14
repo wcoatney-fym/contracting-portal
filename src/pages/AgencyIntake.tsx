@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { supabase, US_STATES } from '../lib/supabase';
@@ -33,10 +33,28 @@ const EMPTY_CONTACT: AgencyContact = {
 export const AgencyIntake: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const invitedByAgencyId = searchParams.get('from') || null;
+  const fromParam = searchParams.get('from') || null;
   const invitedByAgencyName = searchParams.get('agency')
     ? decodeURIComponent(searchParams.get('agency')!)
     : null;
+
+  // `from` can be either a UUID (legacy) or a slug (new contracting portal links).
+  // Resolve slug -> id on mount so invited_by_agency_id is always a valid UUID.
+  const [invitedByAgencyId, setInvitedByAgencyId] = useState<string | null>(fromParam);
+  useEffect(() => {
+    if (!fromParam) return;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fromParam);
+    if (isUuid) return; // already a UUID
+    // It's a slug — resolve to id
+    supabase
+      .from('hierarchy_agencies')
+      .select('id')
+      .eq('slug', fromParam)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.id) setInvitedByAgencyId(data.id);
+      });
+  }, [fromParam]);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
