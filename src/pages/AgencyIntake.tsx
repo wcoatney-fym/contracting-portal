@@ -145,9 +145,11 @@ export const AgencyIntake: React.FC = () => {
       contracting_email: form.contractingEmail.trim(),
       contracting_contact: form.contractingContact.trim() || null,
       agency_npn: form.agencyNpn.trim(),
+      agency_ein: form.agencyEin.trim() || null,
       city: form.city.trim() || null,
       state: form.state || null,
       submitted_at: new Date().toISOString(),
+      invited_by_agency_name: invitedByAgencyName,
     });
 
     setSubmitted(true);

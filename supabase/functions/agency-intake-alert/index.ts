@@ -4,8 +4,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  * agency-intake-alert
  *
  * Called by AgencyIntake.tsx immediately after a successful Supabase insert.
- * Sends a notification email via Resend to Will, Charlie, and Nell so the team
- * knows in real time when an agency completes the intake form.
+ * Sends a notification email via Resend to Will, Charlie, and Nell.
+ *
+ * When the submission came through a parent agency's invite link
+ * (invited_by_agency_name is set), the email prominently flags the parent
+ * so the team knows which downline relationship is being activated.
  *
  * Required env vars (set in Supabase dashboard → Edge Functions → Secrets):
  *   RESEND_API_KEY  — Resend API key
@@ -39,9 +42,11 @@ Deno.serve(async (req: Request) => {
       contracting_email,
       contracting_contact,
       agency_npn,
+      agency_ein,
       city,
       state,
       submitted_at,
+      invited_by_agency_name,
     } = data;
 
     const submittedAt = submitted_at
@@ -49,17 +54,41 @@ Deno.serve(async (req: Request) => {
       : new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
 
     const locationLine = [city, state].filter(Boolean).join(", ") || "—";
+    const hasParent = !!invited_by_agency_name;
+
+    // Subject line differs based on whether this came via a parent agency
+    const subjectLine = hasParent
+      ? `Sub-Agency Intake: ${agency_name ?? "New Submission"} (via ${invited_by_agency_name})`
+      : `Agency Intake: ${agency_name ?? "New Submission"}`;
+
+    // Banner color and headline: orange when parent-agency-referred (higher signal)
+    const bannerBg = hasParent ? "#b45309" : "#1a1a2e";
+    const headline = hasParent
+      ? `📋 Sub-Agency Intake — ${invited_by_agency_name}`
+      : `✅ Agency Intake Form Completed`;
+
+    const parentBannerHtml = hasParent ? `
+      <tr>
+        <td colspan="2" style="padding: 10px 0 6px;">
+          <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 10px 14px;">
+            <strong style="color: #92400e;">Parent Agency:</strong>
+            <span style="color: #78350f; font-size: 15px; margin-left: 6px;">${invited_by_agency_name}</span>
+          </div>
+        </td>
+      </tr>` : "";
 
     const htmlBody = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
-  <div style="background: #1a1a2e; padding: 20px 24px; border-radius: 8px 8px 0 0;">
-    <h2 style="color: #ffffff; margin: 0; font-size: 18px;">✅ Agency Intake Form Completed</h2>
+  <div style="background: ${bannerBg}; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+    <h2 style="color: #ffffff; margin: 0; font-size: 18px;">${headline}</h2>
+    ${hasParent ? `<p style="color: #fcd34d; margin: 6px 0 0; font-size: 13px;">Submitted via ${invited_by_agency_name}'s invite link</p>` : ""}
   </div>
   <div style="background: #f9f9f9; padding: 24px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
     <table style="width: 100%; border-collapse: collapse;">
+      ${parentBannerHtml}
       <tr>
         <td style="padding: 8px 0; font-weight: bold; width: 40%; color: #555;">Agency Name</td>
-        <td style="padding: 8px 0;">${agency_name ?? "—"}</td>
+        <td style="padding: 8px 0; font-size: 15px; font-weight: 600;">${agency_name ?? "—"}</td>
       </tr>
       <tr>
         <td style="padding: 8px 0; font-weight: bold; color: #555;">Principal Agent</td>
@@ -67,16 +96,22 @@ Deno.serve(async (req: Request) => {
       </tr>
       <tr>
         <td style="padding: 8px 0; font-weight: bold; color: #555;">Contracting Email</td>
-        <td style="padding: 8px 0;">${contracting_email ?? "—"}</td>
+        <td style="padding: 8px 0;"><a href="mailto:${contracting_email}" style="color: #1a1a2e;">${contracting_email ?? "—"}</a></td>
       </tr>
+      ${contracting_contact ? `
       <tr>
         <td style="padding: 8px 0; font-weight: bold; color: #555;">Contracting Contact</td>
-        <td style="padding: 8px 0;">${contracting_contact ?? "—"}</td>
-      </tr>
+        <td style="padding: 8px 0;">${contracting_contact}</td>
+      </tr>` : ""}
       <tr>
         <td style="padding: 8px 0; font-weight: bold; color: #555;">Agency NPN</td>
         <td style="padding: 8px 0;">${agency_npn ?? "—"}</td>
       </tr>
+      ${agency_ein ? `
+      <tr>
+        <td style="padding: 8px 0; font-weight: bold; color: #555;">Agency EIN</td>
+        <td style="padding: 8px 0;">${agency_ein}</td>
+      </tr>` : ""}
       <tr>
         <td style="padding: 8px 0; font-weight: bold; color: #555;">Location</td>
         <td style="padding: 8px 0;">${locationLine}</td>
@@ -92,14 +127,13 @@ Deno.serve(async (req: Request) => {
   </div>
 </div>`;
 
-    const textBody = `Agency Intake Completed
+    const textBody = `${hasParent ? `Sub-Agency Intake via ${invited_by_agency_name}` : "Agency Intake Completed"}
 
-Agency: ${agency_name ?? "—"}
+${hasParent ? `Parent Agency: ${invited_by_agency_name}\n` : ""}Agency: ${agency_name ?? "—"}
 Principal: ${principal_agent ?? "—"}
 Email: ${contracting_email ?? "—"}
-Contact: ${contracting_contact ?? "—"}
-NPN: ${agency_npn ?? "—"}
-Location: ${locationLine}
+${contracting_contact ? `Contact: ${contracting_contact}\n` : ""}NPN: ${agency_npn ?? "—"}
+${agency_ein ? `EIN: ${agency_ein}\n` : ""}Location: ${locationLine}
 Submitted: ${submittedAt} ET
 
 Review at https://contracting.teamfym.com`;
@@ -108,7 +142,7 @@ Review at https://contracting.teamfym.com`;
       from: "FYM Contracting <activation@send.teamfym.com>",
       to: ALERT_RECIPIENTS.map((r) => `${r.name} <${r.email}>`),
       reply_to: "will@teamfym.com",
-      subject: `Agency Intake: ${agency_name ?? "New Submission"}`,
+      subject: subjectLine,
       html: htmlBody,
       text: textBody,
     };
