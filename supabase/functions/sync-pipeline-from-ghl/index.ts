@@ -146,12 +146,12 @@ Deno.serve(async (req: Request) => {
     // Also check agency_ghl_configs to find agency name from location
     const { data: agencyConfig } = await supabase
       .from("agency_ghl_configs")
-      .select("agency_id, crm_agencies(id, name)")
+      .select("agency_id, hierarchy_agencies(id, name)")
       .eq("ghl_location_id", ghl_location_id)
       .maybeSingle();
 
     const agencyName = agencyConfig
-      ? (agencyConfig.crm_agencies as { id: string; name: string } | null)?.name || null
+      ? (agencyConfig.hierarchy_agencies as { id: string; name: string } | null)?.name || null
       : null;
     const agencyId = agencyConfig ? agencyConfig.agency_id : null;
 
