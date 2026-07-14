@@ -19,6 +19,7 @@ import {
   Link as LinkIcon,
   ChevronDown,
   ChevronUp,
+  Plus,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { CrmAgency, AgencyIntakeSubmission } from '../lib/supabase';
@@ -394,28 +395,207 @@ const StatusBadge: React.FC<{ status: AgencyIntakeSubmission['status'] }> = ({ s
   );
 };
 
+// ─── Add Sub-Agency Modal ─────────────────────────────────────────────────────
+
+const AddSubAgencyModal: React.FC<{
+  parentAgency: CrmAgency;
+  onClose: () => void;
+  onAdded: (agency: CrmAgency) => void;
+}> = ({ parentAgency, onClose, onAdded }) => {
+  const [name, setName] = useState('');
+  const [agencyNpn, setAgencyNpn] = useState('');
+  const [agencyEin, setAgencyEin] = useState('');
+  const [principalAgent, setPrincipalAgent] = useState('');
+  const [principalAgentNpn, setPrincipalAgentNpn] = useState('');
+  const [contractingEmail, setContractingEmail] = useState('');
+  const [contractingContact, setContractingContact] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // Preview the slug as user types
+  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) { setError('Agency name is required.'); return; }
+    if (!agencyNpn.trim()) { setError('Agency NPN is required.'); return; }
+    if (!agencyEin.trim()) { setError('Agency EIN is required.'); return; }
+    if (!principalAgent.trim()) { setError('Principal Agent name is required.'); return; }
+    if (!principalAgentNpn.trim()) { setError('Principal Agent NPN is required.'); return; }
+    if (!contractingEmail.trim()) { setError('Contracting email is required.'); return; }
+    if (!emailRegex.test(contractingEmail.trim())) { setError('Please enter a valid email.'); return; }
+
+    setSubmitting(true);
+    setError('');
+
+    const portalPassword = `${name.trim()}CRMPortal!`;
+
+    const { data, error: insertErr } = await supabase
+      .from('hierarchy_agencies')
+      .insert({
+        name: name.trim(),
+        agency_type: 'sub',
+        parent_agency_id: parentAgency.id,
+        onboarding_status: 'pending_csr_assignment',
+        is_active: true,
+        crm_enabled: false,
+        slug,
+        portal_password: portalPassword,
+        date_created: new Date().toISOString().slice(0, 10),
+        agency_npn: agencyNpn.trim() || null,
+        agency_ein: agencyEin.trim() || null,
+        principal_agent: principalAgent.trim() || null,
+        principal_agent_npn: principalAgentNpn.trim() || null,
+        contracting_email: contractingEmail.trim() || null,
+        contracting_contact: contractingContact.trim() || null,
+      })
+      .select()
+      .maybeSingle();
+
+    setSubmitting(false);
+
+    if (insertErr) {
+      setError(insertErr.message.includes('23505')
+        ? 'An agency with this name or slug already exists.'
+        : insertErr.message);
+      return;
+    }
+    if (data) onAdded(data as CrmAgency);
+  };
+
+  const Field: React.FC<{
+    label: string; required?: boolean; value: string;
+    onChange: (v: string) => void; placeholder?: string; half?: boolean;
+  }> = ({ label, required, value, onChange, placeholder, half }) => (
+    <div className={half ? '' : 'col-span-2'}>
+      <label className="block text-xs font-medium text-steel-700 mb-1">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setError(''); }}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+      />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-steel-200 flex-shrink-0">
+          <div>
+            <h3 className="font-semibold text-steel-900">Add Sub-Agency</h3>
+            <p className="text-xs text-steel-400 mt-0.5">
+              Under <span className="font-medium text-steel-600">{parentAgency.name}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-steel-100 rounded-lg">
+            <X className="w-5 h-5 text-steel-400" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Agency name + slug preview */}
+          <div>
+            <label className="block text-sm font-medium text-steel-700 mb-1">
+              Agency Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError(''); }}
+              className="w-full px-4 py-2.5 border border-steel-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+              placeholder="e.g. 360 Insurance Group"
+              autoFocus
+            />
+            {slug && (
+              <p className="text-xs text-steel-400 mt-1.5 font-mono">
+                Portal URL: contracting.teamfym.com/agency/<span className="text-navy-600 font-semibold">{slug}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Contracting details */}
+          <div className="border-t border-steel-200 pt-4">
+            <p className="text-xs font-semibold text-steel-500 uppercase tracking-wider mb-3">Contracting Details</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Agency NPN" required value={agencyNpn} onChange={setAgencyNpn} placeholder="e.g. 12345678" half />
+              <Field label="Agency EIN" required value={agencyEin} onChange={setAgencyEin} placeholder="e.g. 12-3456789" half />
+              <Field label="Principal Agent" required value={principalAgent} onChange={setPrincipalAgent} placeholder="Full name" half />
+              <Field label="Principal Agent NPN" required value={principalAgentNpn} onChange={setPrincipalAgentNpn} placeholder="e.g. 12345678" half />
+              <Field label="Contracting Email" required value={contractingEmail} onChange={setContractingEmail} placeholder="email@agency.com" />
+              <Field label="Contracting Contact" value={contractingContact} onChange={setContractingContact} placeholder="Name (optional)" />
+            </div>
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+        </form>
+
+        <div className="px-6 py-4 border-t border-steel-200 flex justify-end gap-3 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-steel-600 border border-steel-300 rounded-lg hover:bg-steel-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={(e) => { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent); }}
+            disabled={submitting}
+            className="px-4 py-2 text-sm font-medium text-white bg-navy-700 rounded-lg hover:bg-navy-800 disabled:opacity-50"
+          >
+            {submitting ? 'Creating…' : 'Add Agency'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Contracting Links Tab ────────────────────────────────────────────────────
 
 const ContractingLinksTab: React.FC<{ agency: CrmAgency }> = ({ agency }) => {
   const [copied, setCopied] = useState(false);
   const [submissions, setSubmissions] = useState<AgencyIntakeSubmission[]>([]);
-  const [loadingSubs, setLoadingSubs] = useState(true);
+  const [subAgencies, setSubAgencies] = useState<CrmAgency[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const baseUrl = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || window.location.origin;
-  const inviteUrl = `${baseUrl}/agency-intake?from=${agency.id}&agency=${encodeURIComponent(agency.name)}`;
+  // Use slug for the invite link — readable, matches the format Charlie described
+  const inviteUrl = `${baseUrl}/agency-intake?from=${agency.slug}&agency=${encodeURIComponent(agency.name)}`;
 
-  useEffect(() => {
-    supabase
-      .from('agency_intake_submissions')
-      .select('*')
-      .eq('invited_by_agency_id', agency.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setSubmissions((data ?? []) as AgencyIntakeSubmission[]);
-        setLoadingSubs(false);
-      });
-  }, [agency.id]);
+  const loadData = async () => {
+    setLoading(true);
+    const [subResult, subResult2] = await Promise.all([
+      supabase
+        .from('hierarchy_agencies')
+        .select('*')
+        .eq('parent_agency_id', agency.id)
+        .eq('is_active', true)
+        .order('name'),
+      supabase
+        .from('agency_intake_submissions')
+        .select('*')
+        .eq('invited_by_agency_name', agency.name)
+        .order('created_at', { ascending: false }),
+    ]);
+    setSubAgencies((subResult.data ?? []) as CrmAgency[]);
+    setSubmissions((subResult2.data ?? []) as AgencyIntakeSubmission[]);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadData(); }, [agency.id]);
 
   const copyUrl = () => {
     navigator.clipboard.writeText(inviteUrl).then(() => {
@@ -431,163 +611,215 @@ const ContractingLinksTab: React.FC<{ agency: CrmAgency }> = ({ agency }) => {
       return next;
     });
 
-  const pending = submissions.filter((s) => s.status === 'pending').length;
+  const pendingCount = submissions.filter((s) => s.status === 'pending').length;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-steel-900">Agency Contracting Link</h2>
-        <p className="text-sm text-steel-500 mt-0.5">
-          Share this link with sub-agencies in your direct downline to start their contracting
-          process. Every submission through this link is tied to your agency.
-        </p>
+      {showAddModal && (
+        <AddSubAgencyModal
+          parentAgency={agency}
+          onClose={() => setShowAddModal(false)}
+          onAdded={(newAgency) => {
+            setSubAgencies((prev) => [...prev, newAgency].sort((a, b) => a.name.localeCompare(b.name)));
+            setShowAddModal(false);
+          }}
+        />
+      )}
+
+      {/* Header + Add button */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-steel-900">Sub-Agencies</h2>
+          <p className="text-sm text-steel-500 mt-0.5">
+            Add agencies in your direct downline or share your intake link so they can apply.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-navy-700 hover:bg-navy-800 rounded-lg transition-colors flex-shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          Add Agency
+        </button>
       </div>
 
-      {/* Single invite link card */}
-      <div className="bg-white rounded-xl border border-steel-200 p-5">
-        <div className="flex items-center gap-2.5 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-navy-50 flex items-center justify-center">
-            <LinkIcon className="w-4 h-4 text-navy-600" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-steel-900">Your Agency Intake Link</p>
-            <p className="text-xs text-steel-400">Send this to any agency contracting under you</p>
-          </div>
+      {/* Invite link card */}
+      <div className="bg-white rounded-xl border border-steel-200 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <LinkIcon className="w-4 h-4 text-steel-400" />
+          <p className="text-xs font-semibold text-steel-700 uppercase tracking-wide">Agency Intake Link</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0 bg-steel-50 border border-steel-200 rounded-lg px-3 py-2.5">
-            <p className="text-xs font-mono text-steel-700 truncate">{inviteUrl}</p>
+          <div className="flex-1 min-w-0 bg-steel-50 border border-steel-200 rounded-lg px-3 py-2">
+            <p className="text-xs font-mono text-steel-600 truncate">{inviteUrl}</p>
           </div>
           <button
             onClick={copyUrl}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors flex-shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-colors flex-shrink-0 ${
               copied
                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                 : 'bg-navy-700 text-white hover:bg-navy-800'
             }`}
           >
-            {copied ? (
-              <><CheckIcon className="w-4 h-4" />Copied!</>
-            ) : (
-              <><Copy className="w-4 h-4" />Copy Link</>
-            )}
+            {copied ? <><CheckIcon className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy</>}
           </button>
         </div>
+        <p className="text-xs text-steel-400 mt-2">
+          Share this link with agencies contracting under you — every submission is tied to {agency.name}.
+        </p>
       </div>
 
-      {/* Submissions tracker */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-semibold text-steel-900">
-            Sub-Agency Submissions
-            {pending > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-200 text-amber-800">
-                {pending} pending
-              </span>
-            )}
-          </p>
-          <p className="text-xs text-steel-400">{submissions.length} total</p>
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-navy-600" />
         </div>
-
-        {loadingSubs ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-navy-600" />
-          </div>
-        ) : submissions.length === 0 ? (
-          <div className="bg-white rounded-xl border border-steel-200 px-6 py-10 text-center">
-            <Users className="w-8 h-8 text-steel-300 mx-auto mb-3" />
-            <p className="text-sm text-steel-500">No sub-agencies have submitted yet.</p>
-            <p className="text-xs text-steel-400 mt-1">Share your link above to get started.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {submissions.map((s) => {
-              const isOpen = expanded.has(s.id);
-              return (
-                <div key={s.id} className="bg-white rounded-xl border border-steel-200 overflow-hidden">
-                  {/* Row header */}
-                  <button
-                    onClick={() => toggleExpand(s.id)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-steel-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-steel-900 truncate">{s.agency_name}</p>
-                        <p className="text-xs text-steel-400 mt-0.5">
-                          {new Date(s.created_at).toLocaleDateString('en-US', {
-                            month: 'short', day: 'numeric', year: 'numeric',
-                          })}
-                        </p>
-                      </div>
+      ) : (
+        <>
+          {/* Direct sub-agencies */}
+          <div>
+            <p className="text-sm font-semibold text-steel-900 mb-3">
+              Direct Sub-Agencies
+              <span className="ml-2 text-xs font-normal text-steel-400">{subAgencies.length}</span>
+            </p>
+            {subAgencies.length === 0 ? (
+              <div className="bg-white rounded-xl border border-steel-200 px-6 py-8 text-center">
+                <Building2 className="w-7 h-7 text-steel-300 mx-auto mb-2" />
+                <p className="text-sm text-steel-500">No sub-agencies yet.</p>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="mt-3 text-xs text-navy-600 hover:text-navy-800 font-medium underline"
+                >
+                  Add the first one
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {subAgencies.map((sub) => (
+                  <div key={sub.id} className="bg-white rounded-xl border border-steel-200 px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-steel-900 truncate">{sub.name}</p>
+                      <p className="text-xs text-steel-400 font-mono mt-0.5">
+                        /agency/<span className="text-navy-600">{sub.slug}</span>
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <StatusBadge status={s.status} />
-                      {isOpen
-                        ? <ChevronUp className="w-4 h-4 text-steel-400" />
-                        : <ChevronDown className="w-4 h-4 text-steel-400" />}
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                        sub.crm_enabled
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-steel-100 text-steel-500'
+                      }`}>
+                        {sub.crm_enabled ? 'CRM On' : 'CRM Off'}
+                      </span>
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                        sub.onboarding_status === 'onboarding_complete'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {sub.onboarding_status === 'onboarding_complete' ? 'Active' : 'Onboarding'}
+                      </span>
                     </div>
-                  </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                  {/* Expanded detail */}
-                  {isOpen && (
-                    <div className="px-4 pb-4 border-t border-steel-100">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mt-3 text-xs">
-                        {[
-                          ['Agency NPN', s.agency_npn],
-                          ['Agency EIN', s.agency_ein],
-                          ['Principal Agent', s.principal_agent],
-                          ['Principal NPN', s.principal_agent_npn],
-                          ['Contracting Email', s.contracting_email],
-                          s.contracting_contact ? ['Contracting Contact', s.contracting_contact] : null,
-                          (s.street_address || s.city || s.state)
-                            ? ['Address', [s.street_address, s.city, s.state, s.zip].filter(Boolean).join(', ')]
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .map((pair) => { const [label, value] = pair as [string, string]; return (
-                            <div key={label}>
-                              <p className="text-[10px] font-semibold text-steel-400 uppercase mb-0.5">{label}</p>
-                              <p className="text-steel-700">{value}</p>
-                            </div>
-                          ); })}
-                      </div>
-                      {(s.additional_contacts ?? []).length > 0 && (
-                        <div className="mt-3">
-                          <p className="text-[10px] font-semibold text-steel-400 uppercase mb-1">Additional Contacts</p>
-                          <div className="space-y-1">
-                            {s.additional_contacts.map((c, ci) => (
-                              <p key={ci} className="text-xs text-steel-600">
-                                <span className="font-medium">{c.name}</span>
-                                {c.title && ` · ${c.title}`}
-                                {c.department && ` (${c.department})`}
-                                {c.email && ` · ${c.email}`}
-                                {c.phone && ` · ${c.phone}`}
-                              </p>
-                            ))}
+          {/* Intake submissions */}
+          <div>
+            <p className="text-sm font-semibold text-steel-900 mb-3">
+              Intake Submissions
+              {pendingCount > 0 && (
+                <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-200 text-amber-800">
+                  {pendingCount} pending
+                </span>
+              )}
+              <span className="ml-2 text-xs font-normal text-steel-400">{submissions.length} total</span>
+            </p>
+            {submissions.length === 0 ? (
+              <div className="bg-white rounded-xl border border-steel-200 px-6 py-8 text-center">
+                <Users className="w-7 h-7 text-steel-300 mx-auto mb-2" />
+                <p className="text-sm text-steel-500">No intake submissions yet.</p>
+                <p className="text-xs text-steel-400 mt-1">Share your intake link above to get started.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {submissions.map((s) => {
+                  const isOpen = expanded.has(s.id);
+                  return (
+                    <div key={s.id} className="bg-white rounded-xl border border-steel-200 overflow-hidden">
+                      <button
+                        onClick={() => toggleExpand(s.id)}
+                        className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-steel-50 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-steel-900 truncate">{s.agency_name}</p>
+                          <p className="text-xs text-steel-400 mt-0.5">
+                            {new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <StatusBadge status={s.status} />
+                          {isOpen ? <ChevronUp className="w-4 h-4 text-steel-400" /> : <ChevronDown className="w-4 h-4 text-steel-400" />}
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div className="px-4 pb-4 border-t border-steel-100">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mt-3 text-xs">
+                            {([
+                              ['Agency NPN', s.agency_npn],
+                              ['Agency EIN', s.agency_ein],
+                              ['Principal Agent', s.principal_agent],
+                              ['Principal NPN', s.principal_agent_npn],
+                              ['Contracting Email', s.contracting_email],
+                              s.contracting_contact ? ['Contracting Contact', s.contracting_contact] : null,
+                              (s.street_address || s.city || s.state) ? ['Address', [s.street_address, s.city, s.state, s.zip].filter(Boolean).join(', ')] : null,
+                            ] as (string[] | null)[])
+                              .filter(Boolean)
+                              .map((pair) => { const [label, value] = pair as string[]; return (
+                                <div key={label}>
+                                  <p className="text-[10px] font-semibold text-steel-400 uppercase mb-0.5">{label}</p>
+                                  <p className="text-steel-700">{value}</p>
+                                </div>
+                              ); })}
                           </div>
+                          {(s.additional_contacts ?? []).length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-[10px] font-semibold text-steel-400 uppercase mb-1">Additional Contacts</p>
+                              {s.additional_contacts.map((c, ci) => (
+                                <p key={ci} className="text-xs text-steel-600">
+                                  <span className="font-medium">{c.name}</span>
+                                  {c.title && ` · ${c.title}`}
+                                  {c.department && ` (${c.department})`}
+                                  {c.email && ` · ${c.email}`}
+                                  {c.phone && ` · ${c.phone}`}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {s.status === 'pending' && (
+                            <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                              Under review by the FYM contracting team.
+                            </p>
+                          )}
+                          {s.status === 'rejected' && s.review_note && (
+                            <p className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                              <span className="font-semibold">Note:</span> {s.review_note}
+                            </p>
+                          )}
                         </div>
                       )}
-                      {s.status === 'pending' && (
-                        <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                          This submission is under review by the FYM contracting team.
-                        </p>
-                      )}
-                      {s.status === 'rejected' && s.review_note && (
-                        <p className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                          <span className="font-semibold">Note:</span> {s.review_note}
-                        </p>
-                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 };
+
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
