@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Building2, Phone, Mail, Calendar, Globe, Save, Hash, User, AlertCircle, MapPin, Users, StickyNote, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, Circle, Building2, Phone, Mail, Calendar, Globe, Save, Hash, User, AlertCircle, MapPin, Users, StickyNote, Plus, Trash2, Eye, EyeOff, Copy, Check as CheckIcon } from 'lucide-react';
 import { supabase, US_STATES } from '../../lib/supabase';
 import type { CrmAgency, AgencyContact } from '../../lib/supabase';
 
@@ -15,6 +15,16 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
+
+  const handleCopyPassword = () => {
+    if (!agency.portal_password) return;
+    navigator.clipboard.writeText(agency.portal_password).then(() => {
+      setPasswordCopied(true);
+      setTimeout(() => setPasswordCopied(false), 2000);
+    });
+  };
   const [hasRoster, setHasRoster] = useState(false);
   const [form, setForm] = useState({
     agency_phone: agency.agency_phone || '',
@@ -281,6 +291,35 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
               Portal Slug
             </label>
             <p className="text-sm font-medium text-steel-900">{agency.slug || '--'}</p>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-steel-500 flex items-center gap-1">
+              <Hash className="w-3 h-3" />
+              Portal Password
+            </label>
+            {agency.portal_password ? (
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-steel-900 font-mono tracking-wide">
+                  {showPassword ? agency.portal_password : '••••••••••••'}
+                </p>
+                <button
+                  onClick={() => setShowPassword(v => !v)}
+                  className="p-1 text-steel-400 hover:text-steel-600 transition-colors"
+                  title={showPassword ? 'Hide' : 'Show'}
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={handleCopyPassword}
+                  className="p-1 text-steel-400 hover:text-navy-600 transition-colors"
+                  title="Copy password"
+                >
+                  {passwordCopied ? <CheckIcon className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-steel-400 italic">Not set</p>
+            )}
           </div>
         </div>
       </div>
