@@ -337,6 +337,7 @@ export const Hierarchy: React.FC = () => {
           submissions={pendingIntakes}
           processingId={processingIntakeId}
           error={intakeError}
+          agencies={agencies}
           onApprove={handleApproveIntakeClick}
           onReject={handleRejectIntake}
         />
@@ -621,6 +622,7 @@ const PendingIntakeTray: React.FC<{
   submissions: AgencyIntakeSubmission[];
   processingId: string | null;
   error: string;
+  agencies: CrmAgency[];
   onApprove: (submission: AgencyIntakeSubmission) => void;
   onReject: (submission: AgencyIntakeSubmission) => void;
 }> = ({ submissions, processingId, error, onApprove, onReject }) => {
