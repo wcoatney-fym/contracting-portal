@@ -54,6 +54,7 @@ export const Hierarchy: React.FC = () => {
   const [agentCounts, setAgentCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [principalSearch, setPrincipalSearch] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedAgency, setSelectedAgency] = useState<CrmAgency | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -97,10 +98,16 @@ export const Hierarchy: React.FC = () => {
   const tree = React.useMemo(() => buildRecursiveTree(agencies, agentCounts), [agencies, agentCounts]);
 
   const filteredTree = (): AgencyNode[] => {
-    if (!search.trim()) return tree;
-    const term = search.toLowerCase();
+    const nameTerm = search.trim().toLowerCase();
+    const principalTerm = principalSearch.trim().toLowerCase();
+    if (!nameTerm && !principalTerm) return tree;
+
     const matchingIds = new Set(
-      agencies.filter(a => a.name.toLowerCase().includes(term)).map(a => a.id)
+      agencies.filter(a => {
+        const nameMatch = !nameTerm || a.name.toLowerCase().includes(nameTerm);
+        const principalMatch = !principalTerm || (a.principal_agent ?? '').toLowerCase().includes(principalTerm);
+        return nameMatch && principalMatch;
+      }).map(a => a.id)
     );
     const ancestorIds = new Set<string>();
     for (const id of matchingIds) {
@@ -335,15 +342,27 @@ export const Hierarchy: React.FC = () => {
         />
       )}
 
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search agencies..."
-          className="w-full pl-10 pr-4 py-2.5 border border-steel-200 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent bg-white"
-        />
+      <div className="flex gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by agency name..."
+            className="w-full pl-10 pr-4 py-2.5 border border-steel-200 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent bg-white"
+          />
+        </div>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-400" />
+          <input
+            type="text"
+            value={principalSearch}
+            onChange={(e) => setPrincipalSearch(e.target.value)}
+            placeholder="Search by principal agent..."
+            className="w-full pl-10 pr-4 py-2.5 border border-steel-200 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent bg-white"
+          />
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -499,6 +518,16 @@ const TreeNode: React.FC<{
             </div>
           </div>
         </div>
+
+        {node.principal_agent && (
+          <div className="hidden sm:flex flex-col items-end text-right mr-2 flex-shrink-0">
+            <span className="text-[10px] font-medium text-steel-400 uppercase tracking-wider">Principal Agent</span>
+            <span className="text-xs font-semibold text-steel-700 mt-0.5">{node.principal_agent}</span>
+            {node.principal_agent_npn && (
+              <span className="text-[10px] text-steel-400 font-mono">NPN {node.principal_agent_npn}</span>
+            )}
+          </div>
+        )}
 
         {!isRoot && (
           <button
