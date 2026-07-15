@@ -16,6 +16,8 @@ import {
   Download,
   UserX,
   Zap,
+  UserPlus,
+  X,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { parseCSV } from '../../lib/csvParser';
@@ -64,6 +66,8 @@ export const RosterTab: React.FC = () => {
   const [terminateSubmitting, setTerminateSubmitting] = useState(false);
   const [terminateError, setTerminateError] = useState('');
   const [populatedCounts, setPopulatedCounts] = useState<Record<string, number>>({});
+  const [addAgentUpload, setAddAgentUpload] = useState<RosterUpload | null>(null);
+  const [addAgentOpen, setAddAgentOpen] = useState(false);
 
   useEffect(() => {
     loadUploads();
@@ -282,6 +286,24 @@ export const RosterTab: React.FC = () => {
     } finally {
       setUploadingAgency(null);
     }
+  };
+
+  const handleAddAgentOpen = (upload: RosterUpload) => {
+    setAddAgentUpload(upload);
+    setAddAgentOpen(true);
+  };
+
+  const handleAddAgentClose = () => {
+    setAddAgentOpen(false);
+    setAddAgentUpload(null);
+  };
+
+  const handleAddAgentSaved = async () => {
+    await loadUploads();
+    if (activeUpload && addAgentUpload && activeUpload.id === addAgentUpload.id) {
+      await loadRows();
+    }
+    handleAddAgentClose();
   };
 
   const handleView = (upload: RosterUpload) => {
@@ -564,6 +586,7 @@ export const RosterTab: React.FC = () => {
               onUpload={handleUpload}
               onView={handleView}
               onDelete={setDeleteConfirm}
+              onAddAgent={uploadsByAgency[agency] ? () => handleAddAgentOpen(uploadsByAgency[agency]!) : undefined}
             />
           ))}
         </div>
@@ -581,6 +604,7 @@ export const RosterTab: React.FC = () => {
           onBack={handleBack}
           onUndo={(row) => { setUndoError(''); setUndoConfirmRow(row); }}
           onTerminate={(row) => { setTerminateError(''); setTerminateRow(row); }}
+          onAddAgent={() => handleAddAgentOpen(activeUpload)}
         />
       )}
 
@@ -656,6 +680,14 @@ export const RosterTab: React.FC = () => {
         </div>
       )}
 
+      {addAgentOpen && addAgentUpload && (
+        <AddAgentModal
+          upload={addAgentUpload}
+          onClose={handleAddAgentClose}
+          onSaved={handleAddAgentSaved}
+        />
+      )}
+
       {terminateRow && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full animate-in fade-in">
@@ -697,6 +729,292 @@ export const RosterTab: React.FC = () => {
   );
 };
 
+// ── AddAgentModal ─────────────────────────────────────────────────────────────
+
+interface AddAgentModalProps {
+  upload: RosterUpload;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}
+
+const AddAgentModal: React.FC<AddAgentModalProps> = ({ upload, onClose, onSaved }) => {
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    agentNpn: '',
+    gender: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const profileImage = form.gender === 'Male'
+    ? MALE_PROFILE_IMAGE
+    : form.gender === 'Female'
+    ? FEMALE_PROFILE_IMAGE
+    : '';
+
+  const handleChange = (field: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setError('');
+  };
+
+  const handleSubmit = async () => {
+    if (!form.firstName.trim()) { setError('First name is required.'); return; }
+    if (!form.lastName.trim()) { setError('Last name is required.'); return; }
+    if (!form.email.trim()) { setError('Email is required.'); return; }
+    if (!form.phone.trim()) { setError('Phone is required.'); return; }
+    if (!form.agentNpn.trim()) { setError('Agent NPN is required.'); return; }
+    if (!form.gender) { setError('Gender is required to assign a profile image.'); return; }
+
+    setSubmitting(true);
+    setError('');
+
+    try {
+      // Load all rows for this upload to find the next open seat
+      const { data: existingRows } = await supabase
+        .from('crm_roster')
+        .select('id, row_data')
+        .eq('upload_id', upload.id);
+
+      const numericRows = (existingRows || []).filter(
+        (r) => /^\d+$/.test(r.row_data['Seat Number'] || '')
+      );
+
+      // Derive shared fields from existing rows
+      const crmNumber = numericRows.find((r) => r.row_data['All Templates | Agent CRM #']?.trim())
+        ?.row_data['All Templates | Agent CRM #'] || '';
+      const calendarEmbed = numericRows.find((r) => r.row_data['Calendar Embed Code']?.trim())
+        ?.row_data['Calendar Embed Code'] || '';
+      const urlPrefix = (() => {
+        const sample = numericRows.find((r) => r.row_data['Digital Business Card Home Page']?.trim());
+        if (!sample) return '';
+        const match = sample.row_data['Digital Business Card Home Page'].match(/^(https?:\/\/[^/]+\.my-agent-appt\.com\/r)\d+/);
+        return match ? sample.row_data['Digital Business Card Home Page'].replace(/\/r\d+-.*$/, '') : '';
+      })();
+
+      // Find next open seat (no First Name, not a CSR placeholder)
+      const openSeat = numericRows
+        .filter((r) => !r.row_data['First Name']?.trim() && r.row_data['CSR Placeholder'] !== 'true')
+        .sort((a, b) => Number(a.row_data['Seat Number']) - Number(b.row_data['Seat Number']))[0];
+
+      let targetSeatId: string;
+      let seatNumber: string;
+
+      if (openSeat) {
+        targetSeatId = openSeat.id;
+        seatNumber = openSeat.row_data['Seat Number'];
+
+        const updatedRowData: Record<string, string> = {
+          ...openSeat.row_data,
+          'First Name': form.firstName.trim(),
+          'Last Name': form.lastName.trim(),
+          'Email': form.email.trim(),
+          'Phone': form.phone.trim(),
+          'Agent NPN': form.agentNpn.trim(),
+          'All Templates | Agent Profile Image': profileImage,
+          'CSR Placeholder': '',
+        };
+
+        const { error: updateError } = await supabase
+          .from('crm_roster')
+          .update({ row_data: updatedRowData })
+          .eq('id', targetSeatId);
+
+        if (updateError) throw new Error('Failed to update roster seat.');
+      } else {
+        // All seats filled — create a new one past the max
+        const maxSeat = numericRows.reduce(
+          (max, r) => Math.max(max, Number(r.row_data['Seat Number'])),
+          0
+        );
+        seatNumber = String(maxSeat + 1);
+
+        const newRowData: Record<string, string> = {};
+        for (const h of upload.headers) newRowData[h] = '';
+        newRowData['Seat Number'] = seatNumber;
+        newRowData['First Name'] = form.firstName.trim();
+        newRowData['Last Name'] = form.lastName.trim();
+        newRowData['Email'] = form.email.trim();
+        newRowData['Phone'] = form.phone.trim();
+        newRowData['Agent NPN'] = form.agentNpn.trim();
+        newRowData['All Templates | Agent Profile Image'] = profileImage;
+        newRowData['All Templates | Agent CRM #'] = crmNumber;
+        if (calendarEmbed) newRowData['Calendar Embed Code'] = calendarEmbed;
+        if (urlPrefix) {
+          newRowData['Digital Business Card Home Page'] = `${urlPrefix}/r${seatNumber}-click-to-schedule`;
+          newRowData['Appt Booked Confirmation Page'] = `${urlPrefix}/r${seatNumber}-youre-confirmed`;
+        }
+
+        const { error: insertError } = await supabase
+          .from('crm_roster')
+          .insert({ upload_id: upload.id, row_data: newRowData });
+
+        if (insertError) throw new Error('Failed to create roster seat.');
+      }
+
+      // Fire webhook (same as CRM onboarding flow)
+      const { data: agencyData } = await supabase
+        .from('hierarchy_agencies')
+        .select('zaps_paused, calendar_embed_code, agency_url_prefix')
+        .eq('name', upload.agency)
+        .maybeSingle();
+
+      if (!agencyData?.zaps_paused) {
+        const seatNum = Number(seatNumber);
+        const digitalCardUrl = urlPrefix
+          ? `${urlPrefix}/r${seatNum}-click-to-schedule`
+          : '';
+        const confirmUrl = urlPrefix
+          ? `${urlPrefix}/r${seatNum}-youre-confirmed`
+          : '';
+
+        await fireCrmOnboardingWebhook({
+          seatNumber,
+          agentNpn: form.agentNpn.trim(),
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          profileImage,
+          crmNumber,
+          agency: upload.agency,
+          digitalBusinessCardUrl: digitalCardUrl,
+          confirmationPageUrl: confirmUrl,
+          calendarEmbedCode: calendarEmbed || agencyData?.calendar_embed_code || '',
+        });
+      }
+
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full animate-in fade-in">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-navy-600">Add Agent to Roster</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{upload.agency} — will be placed in the next open seat</p>
+          </div>
+          <button onClick={onClose} disabled={submitting} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">First Name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={form.firstName}
+                onChange={(e) => handleChange('firstName', e.target.value)}
+                placeholder="Jane"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Last Name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={form.lastName}
+                onChange={(e) => handleChange('lastName', e.target.value)}
+                placeholder="Smith"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => handleChange('email', e.target.value)}
+              placeholder="jane.smith@email.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => handleChange('phone', e.target.value)}
+              placeholder="5551234567"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Agent NPN <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={form.agentNpn}
+              onChange={(e) => handleChange('agentNpn', e.target.value)}
+              placeholder="12345678"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-2">Gender <span className="text-red-500">*</span> <span className="text-gray-400 font-normal">(sets profile image)</span></label>
+            <div className="flex gap-3">
+              {(['Male', 'Female'] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => handleChange('gender', g)}
+                  className={`flex-1 py-2 text-sm font-medium border-2 rounded-lg transition-colors ${
+                    form.gender === g
+                      ? 'border-navy-600 bg-navy-50 text-navy-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="px-4 py-2 text-sm font-medium text-white bg-navy-600 rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {submitting ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Adding...</>
+            ) : (
+              <><UserPlus className="w-4 h-4" />Add Agent</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── RosterTableView ───────────────────────────────────────────────────────────
+
 interface RosterTableViewProps {
   upload: RosterUpload;
   rows: RosterRow[];
@@ -710,6 +1028,7 @@ interface RosterTableViewProps {
   onBack: () => void;
   onUndo: (row: RosterRow) => void;
   onTerminate: (row: RosterRow) => void;
+  onAddAgent: () => void;
 }
 
 const escapeCSVField = (value: string): string => {
@@ -732,6 +1051,7 @@ const RosterTableView: React.FC<RosterTableViewProps> = ({
   onBack,
   onUndo,
   onTerminate,
+  onAddAgent,
 }) => {
   const [zapConfirmOpen, setZapConfirmOpen] = useState(false);
   const [zapSending, setZapSending] = useState(false);
@@ -826,6 +1146,13 @@ const RosterTableView: React.FC<RosterTableViewProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={onAddAgent}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add Agent
+          </button>
           <button
             onClick={() => { setZapResult(null); setZapConfirmOpen(true); }}
             disabled={zapSending || populatedRows.length === 0}
