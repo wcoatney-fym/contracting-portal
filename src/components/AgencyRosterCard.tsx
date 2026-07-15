@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Upload, FileSpreadsheet, Eye, RefreshCw, Trash2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Eye, RefreshCw, Trash2, UserPlus } from 'lucide-react';
 
 type RosterUpload = {
   id: string;
@@ -18,6 +18,7 @@ interface AgencyRosterCardProps {
   onUpload: (agency: string, file: File) => void;
   onView: (upload: RosterUpload) => void;
   onDelete: (upload: RosterUpload) => void;
+  onAddAgent?: () => void;
 }
 
 const DEFAULT_CONFIG = {
@@ -60,6 +61,7 @@ export const AgencyRosterCard: React.FC<AgencyRosterCardProps> = ({
   onUpload,
   onView,
   onDelete,
+  onAddAgent,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const config = AGENCY_CONFIG[agency] || { ...DEFAULT_CONFIG, label: `${agency} CRM Roster` };
@@ -126,6 +128,15 @@ export const AgencyRosterCard: React.FC<AgencyRosterCardProps> = ({
               <Eye className="w-4 h-4" />
               View Roster
             </button>
+            {onAddAgent && (
+              <button
+                onClick={onAddAgent}
+                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add Agent
+              </button>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => fileInputRef.current?.click()}
