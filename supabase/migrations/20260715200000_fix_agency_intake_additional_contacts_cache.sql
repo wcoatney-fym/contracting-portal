@@ -20,15 +20,16 @@
     3. NOTIFY pgrst to force a schema cache reload immediately.
 */
 
--- 1. Ensure new columns exist (idempotent)
-ALTER TABLE public.agency_intake_submissions
-  ADD COLUMN IF NOT EXISTS street_address           text,
-  ADD COLUMN IF NOT EXISTS city                     text,
-  ADD COLUMN IF NOT EXISTS state                    text,
-  ADD COLUMN IF NOT EXISTS zip                      text,
-  ADD COLUMN IF NOT EXISTS additional_contacts      jsonb DEFAULT '[]'::jsonb,
-  ADD COLUMN IF NOT EXISTS invited_by_agency_id     uuid REFERENCES public.hierarchy_agencies(id),
-  ADD COLUMN IF NOT EXISTS invited_by_agency_name   text;
+-- 1. Ensure new columns exist (idempotent).
+-- Note: invited_by_agency_id is plain uuid (no FK) so each ALTER runs independently;
+-- a constraint error on one cannot roll back the others.
+ALTER TABLE public.agency_intake_submissions ADD COLUMN IF NOT EXISTS street_address         text;
+ALTER TABLE public.agency_intake_submissions ADD COLUMN IF NOT EXISTS city                   text;
+ALTER TABLE public.agency_intake_submissions ADD COLUMN IF NOT EXISTS state                  text;
+ALTER TABLE public.agency_intake_submissions ADD COLUMN IF NOT EXISTS zip                    text;
+ALTER TABLE public.agency_intake_submissions ADD COLUMN IF NOT EXISTS additional_contacts    jsonb DEFAULT '[]'::jsonb;
+ALTER TABLE public.agency_intake_submissions ADD COLUMN IF NOT EXISTS invited_by_agency_id   uuid;
+ALTER TABLE public.agency_intake_submissions ADD COLUMN IF NOT EXISTS invited_by_agency_name text;
 
 -- 2. Re-affirm grants so PostgREST picks up all columns
 GRANT INSERT ON public.agency_intake_submissions TO anon;
