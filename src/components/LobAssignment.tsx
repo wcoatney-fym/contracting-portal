@@ -122,7 +122,7 @@ export const LobAssignment: React.FC<LobAssignmentProps> = ({
             let resolvedNpn = agentNpn.trim();
             if (!resolvedNpn) {
               const { data: sub } = await supabase
-                .from('form_submissions')
+                .from('agent_intake')
                 .select('npn')
                 .eq('agent_id', agentId)
                 .maybeSingle();

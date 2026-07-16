@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, X, Download, UserPlus, CheckCircle, FileDown, Undo2, UserX } from 'lucide-react';
-import { supabase, Agent, FormSubmission, UploadedFile, AgentLobAssignment, formatPhoneDisplay } from '../lib/supabase';
+import { supabase, Agent, AgentIntakeRecord, UploadedFile, AgentLobAssignment, formatPhoneDisplay } from '../lib/supabase';
 import { LobAssignment } from '../components/LobAssignment';
 import { fireCrmOnboardingWebhook } from '../lib/webhooks';
 
@@ -9,14 +9,14 @@ const FEMALE_PROFILE_IMAGE = 'https://storage.googleapis.com/msgsndr/YM9XmCanfO6
 
 export const AgentDatabase: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [submissions, setSubmissions] = useState<Record<string, FormSubmission>>({});
+  const [submissions, setSubmissions] = useState<Record<string, AgentIntakeRecord>>({});
   const [filteredAgents, setFilteredAgents] = useState<Agent[]>([]);
   const [searchName, setSearchName] = useState('');
   const [searchCode, setSearchCode] = useState('');
   const [formTypeFilter, setFormTypeFilter] = useState('');
   const [agencyFilter, setAgencyFilter] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null);
+  const [selectedSubmission, setSelectedSubmission] = useState<AgentIntakeRecord | null>(null);
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [lobAssignments, setLobAssignments] = useState<Record<string, AgentLobAssignment[]>>({});
   const [crmConfirmAgent, setCrmConfirmAgent] = useState<Agent | null>(null);
@@ -50,12 +50,12 @@ export const AgentDatabase: React.FC = () => {
       setAgents(agentData);
 
       const { data: submissionData } = await supabase
-        .from('form_submissions')
+        .from('agent_intake')
         .select('*')
         .in('agent_id', agentData.map(a => a.id));
 
       if (submissionData) {
-        const submissionsMap: Record<string, FormSubmission> = {};
+        const submissionsMap: Record<string, AgentIntakeRecord> = {};
         submissionData.forEach(sub => {
           submissionsMap[sub.agent_id] = sub;
         });
