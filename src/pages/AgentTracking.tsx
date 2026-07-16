@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, RefreshCw, Trash2, X, Download, CreditCard as Edit } from 'lucide-react';
-import { supabase, Agent, FormSubmission, UploadedFile, formatPhoneDisplay } from '../lib/supabase';
+import { supabase, Agent, AgentIntakeRecord, UploadedFile, formatPhoneDisplay } from '../lib/supabase';
 
 export const AgentTracking: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -10,7 +10,7 @@ export const AgentTracking: React.FC = () => {
   const [formTypeFilter, setFormTypeFilter] = useState('');
   const [agencyFilter, setAgencyFilter] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [submission, setSubmission] = useState<FormSubmission | null>(null);
+  const [submission, setSubmission] = useState<AgentIntakeRecord | null>(null);
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
@@ -79,7 +79,7 @@ export const AgentTracking: React.FC = () => {
 
     if (agent.status === 'completed') {
       const { data: subData } = await supabase
-        .from('form_submissions')
+        .from('agent_intake')
         .select('*')
         .eq('agent_id', agent.id)
         .maybeSingle();
@@ -218,11 +218,11 @@ export const AgentTracking: React.FC = () => {
       const exportData = [];
 
       for (const agent of filteredAgents) {
-        let submissionData: FormSubmission | null = null;
+        let submissionData: AgentIntakeRecord | null = null;
 
         if (agent.status === 'completed') {
           const { data } = await supabase
-            .from('form_submissions')
+            .from('agent_intake')
             .select('*')
             .eq('agent_id', agent.id)
             .maybeSingle();

@@ -35,7 +35,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { Agent, FormSubmission } from '../../lib/supabase';
+import type { Agent, AgentIntakeRecord } from '../../lib/supabase';
 import { formatPhoneDisplay } from '../../lib/supabase';
 
 type PipelineRecord = {
@@ -139,7 +139,7 @@ export const PipelineTab: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
   const [detailRecord, setDetailRecord] = useState<PipelineRecord | null>(null);
   const [detailAgent, setDetailAgent] = useState<Agent | null>(null);
-  const [detailSubmission, setDetailSubmission] = useState<FormSubmission | null>(null);
+  const [detailSubmission, setDetailSubmission] = useState<AgentIntakeRecord | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [, setTick] = useState(0);
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
@@ -355,7 +355,7 @@ export const PipelineTab: React.FC = () => {
       setDetailLoading(true);
       const [agentRes, subRes] = await Promise.all([
         supabase.from('agents').select('*').eq('id', record.agent_id).maybeSingle(),
-        supabase.from('form_submissions').select('*').eq('agent_id', record.agent_id).maybeSingle(),
+        supabase.from('agent_intake').select('*').eq('agent_id', record.agent_id).maybeSingle(),
       ]);
       setDetailAgent(agentRes.data);
       setDetailSubmission(subRes.data);
@@ -1176,7 +1176,7 @@ const CountdownBadge: React.FC<{ record: PipelineRecord; compact?: boolean }> = 
 interface AgentDetailModalProps {
   record: PipelineRecord;
   agent: Agent | null;
-  submission: FormSubmission | null;
+  submission: AgentIntakeRecord | null;
   loading: boolean;
   onClose: () => void;
 }

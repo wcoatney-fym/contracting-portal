@@ -66,7 +66,7 @@ export const Telesales: React.FC = () => {
 
     try {
       const { error: submissionError } = await supabase
-        .from('form_submissions')
+        .from('agent_intake')
         .insert({
           agent_id: agent.id,
           date_of_birth: formData.dateOfBirth,

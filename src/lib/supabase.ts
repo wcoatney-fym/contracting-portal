@@ -30,7 +30,7 @@ export type Agent = {
   updated_at: string;
 };
 
-export type FormSubmission = {
+export type AgentIntakeRecord = {
   id: string;
   agent_id: string;
   date_of_birth: string;
