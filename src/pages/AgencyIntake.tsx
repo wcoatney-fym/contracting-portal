@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { supabase, US_STATES } from '../lib/supabase';
-import { fireAgencyIntakeAlert } from '../lib/webhooks';
+import { fireAgencyIntakeAlert, fireAgencyIntakeWelcome } from '../lib/webhooks';
 import type { AgencyContact } from '../lib/supabase';
 
 /**
@@ -111,7 +111,7 @@ export const AgencyIntake: React.FC = () => {
 
     setSubmitting(true);
 
-    const { error: insertError } = await supabase
+    const { data: insertResult, error: insertError } = await supabase
       .from('agency_intake_submissions')
       .insert({
         agency_name: agencyName,
@@ -129,16 +129,21 @@ export const AgencyIntake: React.FC = () => {
         invited_by_agency_id: invitedByAgencyId,
         invited_by_agency_name: invitedByAgencyName,
         status: 'pending',
-      });
+      })
+      .select('id')
+      .maybeSingle();
 
     setSubmitting(false);
 
-    if (insertError) {
-      setError(`Submission failed: ${insertError.message}`);
+    // PGRST116 = 0 rows returned via maybeSingle (RLS blocks the read-back for anon)
+    // That’s fine — the insert still succeeded. Only hard-fail on real insert errors.
+    const realInsertError = insertError?.code === 'PGRST116' ? null : insertError;
+    if (realInsertError) {
+      setError(`Submission failed: ${realInsertError.message}`);
       return;
     }
 
-    // Fire alert email to Will, Charlie, and Nell — best-effort, non-blocking
+    // Fire internal alert to Will, Charlie, and Nell — best-effort, non-blocking
     fireAgencyIntakeAlert({
       agency_name: agencyName,
       principal_agent: form.principalAgent.trim(),
@@ -150,6 +155,15 @@ export const AgencyIntake: React.FC = () => {
       state: form.state || null,
       submitted_at: new Date().toISOString(),
       invited_by_agency_name: invitedByAgencyName,
+    });
+
+    // Fire welcome email (Activity Tracker admin link + creds) to the agency — best-effort, non-blocking
+    fireAgencyIntakeWelcome({
+      agency_name: agencyName,
+      principal_agent: form.principalAgent.trim(),
+      contracting_email: form.contractingEmail.trim(),
+      contracting_contact: form.contractingContact.trim() || null,
+      intake_submission_id: insertResult?.id ?? null,
     });
 
     setSubmitted(true);

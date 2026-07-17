@@ -257,6 +257,47 @@ export const fireAgencyIntakeAlert = async (data: AgencyIntakeAlertData): Promis
   }
 };
 
+// ── Agency Intake Welcome ────────────────────────────────────────────────────
+
+const AGENCY_INTAKE_WELCOME_URL = `${SUPABASE_URL}/functions/v1/agency-intake-welcome`;
+
+interface AgencyIntakeWelcomeData {
+  agency_name: string;
+  agency_slug?: string | null;
+  principal_agent: string;
+  contracting_email: string;
+  contracting_contact?: string | null;
+  intake_submission_id?: string | null;
+}
+
+/**
+ * Fires after a successful agency_intake_submissions insert.
+ * Looks up the agency's Activity Tracker credentials and either:
+ *   • sends a welcome email with the admin link + login creds, OR
+ *   • creates a cc_tasks flag for the team to send manually.
+ * Best-effort, non-blocking — call without await.
+ */
+export const fireAgencyIntakeWelcome = async (data: AgencyIntakeWelcomeData): Promise<void> => {
+  try {
+    const response = await fetch(AGENCY_INTAKE_WELCOME_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify(data),
+    });
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Agency intake welcome fired:', result.path, result.resend_id ?? '');
+    } else {
+      console.error('Agency intake welcome webhook failed:', response.status, response.statusText);
+    }
+  } catch (error) {
+    console.error('Agency intake welcome webhook error:', error);
+  }
+};
+
 export const fireCrossSellConfirmWebhook = async (data: CrossSellConfirmWebhookData): Promise<boolean> => {
   try {
     const response = await fetch(CROSS_SELL_CONFIRM_WEBHOOK_URL, {
