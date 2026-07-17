@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Building2, Phone, Mail, Calendar, Globe, Save, Hash, User, AlertCircle, MapPin, Users, StickyNote, Plus, Trash2, Eye, EyeOff, Copy, Check as CheckIcon, ExternalLink, Link2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CheckCircle2, Circle, Building2, Phone, Mail, Calendar, Globe, Save, Hash, User, AlertCircle, MapPin, Users, StickyNote, Plus, Trash2, Eye, EyeOff, Copy, Check as CheckIcon, ExternalLink, Link2, Send } from 'lucide-react';
 import { supabase, US_STATES } from '../../lib/supabase';
-import type { CrmAgency, AgencyContact } from '../../lib/supabase';
+import type { CrmAgency, AgencyContact, AgencyNote } from '../../lib/supabase';
 
 interface ContractingOnboardingTabProps {
   agency: CrmAgency;
@@ -15,6 +15,12 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [noteInput, setNoteInput] = useState('');
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notes, setNotes] = useState<AgencyNote[]>(
+    Array.isArray(agency.internal_notes) ? agency.internal_notes : []
+  );
+  const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordCopied, setPasswordCopied] = useState(false);
 
@@ -39,7 +45,6 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
     city: agency.city || '',
     agency_state: agency.agency_state || '',
     zip: agency.zip || '',
-    internal_notes: agency.internal_notes || '',
   });
   const [additionalContacts, setAdditionalContacts] = useState<AgencyContact[]>(
     agency.additional_contacts ?? []
@@ -88,7 +93,6 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
         agency_state: form.agency_state.trim() || null,
         zip: form.zip.trim() || null,
         additional_contacts: cleanedContacts,
-        internal_notes: form.internal_notes.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', agency.id);
@@ -109,7 +113,6 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
         agency_state: form.agency_state.trim() || null,
         zip: form.zip.trim() || null,
         additional_contacts: cleanedContacts,
-        internal_notes: form.internal_notes.trim() || null,
       });
       setAdditionalContacts(cleanedContacts);
       setEditing(false);
@@ -625,25 +628,157 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
       </div>
 
       {/* Internal Notes Section */}
-      <div className="border-t border-steel-200 pt-6">
-        <div className="flex items-center gap-2 mb-4">
-          <StickyNote className="w-4 h-4 text-steel-400" />
-          <h4 className="font-semibold text-steel-900 text-sm">Internal Notes</h4>
-        </div>
-        {editing ? (
-          <textarea
-            value={form.internal_notes}
-            onChange={(e) => setForm(f => ({ ...f, internal_notes: e.target.value }))}
-            rows={4}
-            className="w-full px-3 py-2 text-sm border border-steel-300 rounded-md focus:ring-2 focus:ring-navy-500 focus:border-transparent resize-none"
-            placeholder="Internal notes about this agency…"
-          />
-        ) : (
-          <p className={`text-sm whitespace-pre-wrap ${agency.internal_notes ? 'text-steel-900' : 'text-steel-400 italic'}`}>
-            {agency.internal_notes || 'No notes yet.'}
-          </p>
+      <InternalNotesSection
+        agencyId={agency.id}
+        notes={notes}
+        onNotesChange={(updated) => {
+          setNotes(updated);
+          onAgencyUpdated({ ...agency, internal_notes: updated });
+        }}
+        noteInput={noteInput}
+        setNoteInput={setNoteInput}
+        notesSaving={notesSaving}
+        setNotesSaving={setNotesSaving}
+        noteInputRef={noteInputRef}
+      />
+    </div>
+  );
+};
+
+// ─── Internal Notes sub-component ──────────────────────────────────────────
+
+function formatNoteTimestamp(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(new Date(iso)) + ' CT';
+  } catch {
+    return iso;
+  }
+}
+
+interface InternalNotesSectionProps {
+  agencyId: string;
+  notes: AgencyNote[];
+  onNotesChange: (updated: AgencyNote[]) => void;
+  noteInput: string;
+  setNoteInput: (v: string) => void;
+  notesSaving: boolean;
+  setNotesSaving: (v: boolean) => void;
+  noteInputRef: React.RefObject<HTMLTextAreaElement>;
+}
+
+const InternalNotesSection: React.FC<InternalNotesSectionProps> = ({
+  agencyId,
+  notes,
+  onNotesChange,
+  noteInput,
+  setNoteInput,
+  notesSaving,
+  setNotesSaving,
+  noteInputRef,
+}) => {
+  const [focused, setFocused] = useState(false);
+
+  const handleAddNote = async () => {
+    const text = noteInput.trim();
+    if (!text) return;
+    setNotesSaving(true);
+    const newNote: AgencyNote = {
+      text,
+      created_at: new Date().toISOString(),
+    };
+    const updated = [newNote, ...notes];
+    const { error } = await supabase
+      .from('hierarchy_agencies')
+      .update({ internal_notes: updated, updated_at: new Date().toISOString() })
+      .eq('id', agencyId);
+    if (!error) {
+      onNotesChange(updated);
+      setNoteInput('');
+      setFocused(false);
+    }
+    setNotesSaving(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleAddNote();
+    }
+    if (e.key === 'Escape') {
+      setNoteInput('');
+      setFocused(false);
+      noteInputRef.current?.blur();
+    }
+  };
+
+  return (
+    <div className="border-t border-steel-200 pt-6">
+      <div className="flex items-center gap-2 mb-4">
+        <StickyNote className="w-4 h-4 text-steel-400" />
+        <h4 className="font-semibold text-steel-900 text-sm">Internal Notes</h4>
+        <span className="text-xs text-steel-400 ml-auto">
+          {notes.length > 0 ? `${notes.length} entr${notes.length === 1 ? 'y' : 'ies'}` : ''}
+        </span>
+      </div>
+
+      {/* Compose area */}
+      <div className={`mb-4 rounded-lg border transition-all ${
+        focused
+          ? 'border-navy-400 ring-2 ring-navy-100 bg-white'
+          : 'border-steel-200 bg-steel-50 hover:border-steel-300'
+      }`}>
+        <textarea
+          ref={noteInputRef}
+          value={noteInput}
+          onChange={(e) => setNoteInput(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => { if (!noteInput.trim()) setFocused(false); }}
+          onKeyDown={handleKeyDown}
+          rows={focused ? 3 : 1}
+          placeholder="Add a note… (Cmd+Enter to save)"
+          className="w-full px-3 py-2 text-sm bg-transparent border-none outline-none resize-none placeholder:text-steel-400"
+        />
+        {focused && (
+          <div className="flex items-center justify-between px-3 pb-2">
+            <span className="text-[10px] text-steel-400">Cmd+Enter to save · Esc to cancel</span>
+            <button
+              onClick={handleAddNote}
+              disabled={notesSaving || !noteInput.trim()}
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md bg-navy-700 text-white hover:bg-navy-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="w-3 h-3" />
+              {notesSaving ? 'Saving…' : 'Add Note'}
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Notes feed — newest first */}
+      {notes.length === 0 ? (
+        <p className="text-sm text-steel-400 italic">No notes yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {notes.map((note, i) => (
+            <div
+              key={i}
+              className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3"
+            >
+              <p className="text-xs text-amber-700 font-medium mb-1">
+                {formatNoteTimestamp(note.created_at)}
+              </p>
+              <p className="text-sm text-steel-900 whitespace-pre-wrap">{note.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

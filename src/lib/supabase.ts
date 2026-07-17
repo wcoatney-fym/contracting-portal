@@ -96,6 +96,11 @@ export type AgencyContact = {
   phone: string;
 };
 
+export type AgencyNote = {
+  text: string;
+  created_at: string; // ISO 8601
+};
+
 export type CrmAgency = {
   id: string;
   name: string;
@@ -153,7 +158,7 @@ export type CrmAgency = {
   city: string | null;
   zip: string | null;
   additional_contacts: AgencyContact[];
-  internal_notes: string | null;
+  internal_notes: AgencyNote[] | null;
   created_at: string;
   updated_at: string;
 };
