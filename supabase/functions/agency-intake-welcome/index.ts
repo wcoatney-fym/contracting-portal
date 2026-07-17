@@ -104,6 +104,21 @@ function buildWelcomeEmail(params: {
       </p>
     </div>
 
+    <div style="background: #f0f9ff; border: 1px solid #7dd3fc; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+      <p style="margin: 0 0 10px; font-size: 15px; font-weight: 700; color: #0c4a6e;">📋 Next Step: Upload Your Agent Roster</p>
+      <p style="margin: 0 0 10px; font-size: 14px; color: #0369a1; line-height: 1.6;">
+        To get your agency fully set up, please upload your agent roster inside the Activity Tracker:
+      </p>
+      <ol style="margin: 0 0 10px; padding-left: 20px; font-size: 14px; color: #0369a1; line-height: 1.8;">
+        <li>Log in using the credentials above</li>
+        <li>Navigate to the <strong>Admin</strong> panel</li>
+        <li>Select <strong>Agent Roster</strong> and upload your CSV file</li>
+      </ol>
+      <p style="margin: 0; font-size: 13px; color: #0369a1;">
+        Need the roster template? It's available for download inside the portal. Reach out to us if you need help formatting your file.
+      </p>
+    </div>
+
     <p style="color: #374151; font-size: 14px; line-height: 1.6;">
       Questions? Reply to this email or reach us at
       <a href="mailto:Contracting@teamfym.com" style="color: #1a1a2e;">Contracting@teamfym.com</a>.
@@ -123,6 +138,13 @@ Username:  ${username}
 Password:  ${password}
 
 Keep these credentials secure.
+
+NEXT STEP: Upload Your Agent Roster
+1. Log in using the credentials above
+2. Navigate to the Admin panel
+3. Select Agent Roster and upload your CSV file
+
+Need the roster template? It's available for download inside the portal.
 
 Questions? Contact Contracting@teamfym.com`;
 
