@@ -629,7 +629,6 @@ export const ContractingOnboardingTab: React.FC<ContractingOnboardingTabProps> =
         <div className="flex items-center gap-2 mb-4">
           <StickyNote className="w-4 h-4 text-steel-400" />
           <h4 className="font-semibold text-steel-900 text-sm">Internal Notes</h4>
-          <span className="text-[10px] font-semibold text-steel-400 uppercase bg-steel-100 px-1.5 py-0.5 rounded">CRM Team Only</span>
         </div>
         {editing ? (
           <textarea
