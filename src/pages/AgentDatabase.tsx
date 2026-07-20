@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, X, Download, UserPlus, CheckCircle, FileDown, Undo2, UserX } from 'lucide-react';
+import { Eye, X, Download, UserPlus, CheckCircle, FileDown, Undo2, UserX, Pencil } from 'lucide-react';
 import { supabase, Agent, AgentIntakeRecord, UploadedFile, AgentLobAssignment, formatPhoneDisplay } from '../lib/supabase';
 import { LobAssignment } from '../components/LobAssignment';
 import { fireCrmOnboardingWebhook } from '../lib/webhooks';
+import { AgentEditModal } from '../components/AgentEditModal';
 
 const MALE_PROFILE_IMAGE = 'https://storage.googleapis.com/msgsndr/YM9XmCanfO6p28b1sQOH/media/6882b3d23303840127a970fb.png';
 const FEMALE_PROFILE_IMAGE = 'https://storage.googleapis.com/msgsndr/YM9XmCanfO6p28b1sQOH/media/6882b3d2f665866357dfd218.png';
@@ -30,6 +31,7 @@ export const AgentDatabase: React.FC = () => {
   const [terminateAgent, setTerminateAgent] = useState<Agent | null>(null);
   const [terminateSubmitting, setTerminateSubmitting] = useState(false);
   const [terminateError, setTerminateError] = useState('');
+  const [editAgent, setEditAgent] = useState<Agent | null>(null);
 
   useEffect(() => {
     loadData();
@@ -654,6 +656,19 @@ export const AgentDatabase: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">{submission?.resident_state || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-1">
+                        <div className="relative group/edit">
+                          <button
+                            onClick={() => setEditAgent(agent)}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors"
+                            aria-label={`Edit ${agent.first_name} ${agent.last_name}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-xs font-medium text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/edit:opacity-100 transition-opacity pointer-events-none">
+                            Edit Agent
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                          </span>
+                        </div>
                         <div className="relative group/view">
                           <button
                             onClick={() => handleView(agent)}
@@ -977,6 +992,18 @@ export const AgentDatabase: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+
+      {editAgent && (
+        <AgentEditModal
+          agent={editAgent}
+          onClose={() => setEditAgent(null)}
+          onSaved={(updated) => {
+            setAgents(prev => prev.map(a => a.id === updated.id ? updated : a));
+            if (selectedAgent?.id === updated.id) setSelectedAgent(updated);
+            setEditAgent(null);
+          }}
+        />
       )}
 
       {terminateAgent && (
