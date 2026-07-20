@@ -30,6 +30,7 @@ import {
   Wrench,
   Zap,
   Upload,
+  ShieldAlert,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { CrmAgency } from '../lib/supabase';
@@ -43,8 +44,9 @@ import { TemplateManagementTab } from './crm/TemplateManagementTab';
 import { TestingTab } from './crm/TestingTab';
 import { ActivityHistoryTab } from './crm/ActivityHistoryTab';
 import { ContactImportTab } from './crm/ContactImportTab';
+import { NpnHoldsTab } from './crm/NpnHoldsTab';
 
-type CrmView = 'dashboard' | 'agencies' | 'work-queue' | 'pipeline' | 'roster' | 'templates' | 'testing' | 'history' | 'contact-import';
+type CrmView = 'dashboard' | 'agencies' | 'work-queue' | 'pipeline' | 'roster' | 'templates' | 'testing' | 'history' | 'contact-import' | 'npn-holds';
 
 type NavItem = { key: CrmView; label: string; icon: React.FC<{ className?: string }> };
 type NavGroup = { label: string; icon: React.FC<{ className?: string }>; items: NavItem[] };
@@ -73,6 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: Wrench,
     items: [
       { key: 'contact-import', label: 'Contact Import', icon: Upload },
+      { key: 'npn-holds', label: 'NPN Holds', icon: ShieldAlert },
       { key: 'templates', label: 'Templates', icon: FileSpreadsheet },
       { key: 'testing', label: 'Testing', icon: FlaskConical },
     ],
@@ -281,6 +284,8 @@ export const CrmTeam: React.FC = () => {
         return <ActivityHistoryTab key={`history-${refreshKey}`} />;
       case 'contact-import':
         return <ContactImportTab key={`contact-import-${refreshKey}`} />;
+      case 'npn-holds':
+        return <NpnHoldsTab key={`npn-holds-${refreshKey}`} />;
       default:
         return null;
     }
