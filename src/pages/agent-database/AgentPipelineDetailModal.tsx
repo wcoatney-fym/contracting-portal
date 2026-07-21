@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, User, Mail, Phone, Building2, Clock, PenLine, StickyNote, Save, Loader2, ArrowRightLeft, Tag, FileText, ListChecks, Check } from 'lucide-react';
+import { WritingNumberReviewPanel } from './WritingNumberReviewPanel';
 import { supabase } from '../../lib/supabase';
 import type { AgentPipelineRecord, AgentPipelineStage, AgentPipelineStageStep } from '../../lib/supabase';
 import { STAGES } from './AgentPipelineBoard';
@@ -64,6 +65,7 @@ export const AgentPipelineDetailModal: React.FC<AgentPipelineDetailModalProps> =
   const [pendingStage, setPendingStage] = useState<AgentPipelineStage>(record.stage);
 
   const isReadyStage = record.stage === 'hip_broker_ready' || record.stage === 'hip_career_ready';
+  const [wnPendingCount, setWnPendingCount] = useState(record.wn_pending_count ?? 0);
   const hasChanges =
     writingNumbers !== (record.writing_numbers || '') ||
     notes !== (record.notes || '');
@@ -282,6 +284,23 @@ export const AgentPipelineDetailModal: React.FC<AgentPipelineDetailModalProps> =
               </div>
             </div>
           </div>
+
+          {/* Writing Number Review — contracting team action */}
+          {(wnPendingCount > 0 || (record.wn_pending_review)) && record.agent_id && (
+            <WritingNumberReviewPanel
+              agentId={record.agent_id}
+              agentName={record.agent_name}
+              pendingCount={wnPendingCount}
+              onReviewComplete={(remaining) => {
+                setWnPendingCount(remaining);
+                onRecordUpdated({
+                  ...record,
+                  wn_pending_review: remaining > 0,
+                  wn_pending_count: remaining,
+                });
+              }}
+            />
+          )}
 
           {/* Writing Numbers - only for READY stages */}
           {isReadyStage && (

@@ -258,6 +258,10 @@ export type AgentPipelineRecord = {
   stage_entered_at: string;
   created_at: string;
   updated_at: string;
+  // Writing number review flags (added PR #54)
+  wn_pending_review: boolean;
+  wn_pending_count: number;
+  agent_id: string | null; // FK to agents.id — populated on intake form submission
 };
 
 export type AgentPipelineGhlConfig = {

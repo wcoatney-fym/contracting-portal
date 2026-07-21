@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine, Settings, Wifi, WifiOff, Loader2, Download, CheckCircle2, ArrowRight, ListChecks } from 'lucide-react';
+import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine, Settings, Wifi, WifiOff, Loader2, Download, CheckCircle2, ArrowRight, ListChecks, FileCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { AgentPipelineRecord, AgentPipelineStage, AgentPipelineGhlConfig, AgentPipelineStageStep } from '../../lib/supabase';
 import { AgentPipelineDetailModal } from './AgentPipelineDetailModal';
@@ -416,6 +416,13 @@ export const AgentPipelineBoard: React.FC = () => {
                       </div>
                       {pushingIds.has(record.id) ? (
                         <Loader2 className="w-3 h-3 text-navy-500 animate-spin" />
+                      ) : record.wn_pending_review ? (
+                        <div className="flex items-center gap-1 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
+                          <FileCheck className="w-3 h-3 text-amber-600" />
+                          <span className="text-[10px] text-amber-700 font-bold">
+                            {record.wn_pending_count > 0 ? `${record.wn_pending_count} WN` : 'WN'}
+                          </span>
+                        </div>
                       ) : (col.key === 'hip_broker_ready' || col.key === 'hip_career_ready') && record.writing_numbers ? (
                         <div className="flex items-center gap-1">
                           <PenLine className="w-3 h-3 text-emerald-500" />
