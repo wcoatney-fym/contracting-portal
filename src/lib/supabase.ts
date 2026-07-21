@@ -252,7 +252,8 @@ export type AgentPipelineRecord = {
   tags: string[];
   custom_fields: Record<string, unknown>;
   completed_steps: Record<string, string>;
-  last_updated_by: 'ghl_webhook' | 'ui';
+  last_updated_by: string; // 'ghl_webhook' | 'Tracey' | 'Bianca' | custom name
+  last_updated_by_display: string | null; // human-readable override label
   ghl_sync_status: 'synced' | 'pending_push' | 'pushing';
   stage_entered_at: string;
   created_at: string;

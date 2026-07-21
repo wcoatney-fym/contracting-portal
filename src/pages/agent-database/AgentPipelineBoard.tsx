@@ -40,7 +40,11 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(days / 30)}mo`;
 }
 
-async function pushStageChange(recordId: string, newStage: AgentPipelineStage): Promise<{ success: boolean; record?: AgentPipelineRecord; error?: string; ghl_pushed?: boolean }> {
+async function pushStageChange(
+  recordId: string,
+  newStage: AgentPipelineStage,
+  updatedBy = 'Tracey',
+): Promise<{ success: boolean; record?: AgentPipelineRecord; error?: string; ghl_pushed?: boolean }> {
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/push-pipeline-stage`;
   const res = await fetch(apiUrl, {
     method: 'POST',
@@ -48,7 +52,7 @@ async function pushStageChange(recordId: string, newStage: AgentPipelineStage): 
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ record_id: recordId, new_stage: newStage }),
+    body: JSON.stringify({ record_id: recordId, new_stage: newStage, updated_by: updatedBy, updated_by_source: 'contracting_portal' }),
   });
 
   if (!res.ok) {
@@ -403,9 +407,12 @@ export const AgentPipelineBoard: React.FC = () => {
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 flex-wrap gap-y-0.5">
                         <Clock className="w-3 h-3 text-steel-400" />
                         <span className="text-[11px] text-steel-400">{timeAgo(record.stage_entered_at)}</span>
+                        {record.last_updated_by && record.last_updated_by !== 'ghl_webhook' && (
+                          <span className="text-[10px] text-steel-400">· {record.last_updated_by_display ?? record.last_updated_by}</span>
+                        )}
                       </div>
                       {pushingIds.has(record.id) ? (
                         <Loader2 className="w-3 h-3 text-navy-500 animate-spin" />

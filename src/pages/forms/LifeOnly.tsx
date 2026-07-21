@@ -5,6 +5,7 @@ import { StateLicenseSelector } from '../../components/StateLicenseSelector';
 import { SSNInput } from '../../components/SSNInput';
 import { supabase, Agent, US_STATES, formatPhoneDisplay } from '../../lib/supabase';
 import { fireSubmissionWebhook } from '../../lib/webhooks';
+import { generateHubToken } from '../../lib/hubToken';
 import { VerificationModal } from '../../components/VerificationModal';
 import { EditableAgentInfo } from '../../components/EditableAgentInfo';
 
@@ -137,6 +138,14 @@ export const LifeOnly: React.FC = () => {
           name: file.name,
           type: file.type
         }))
+      });
+
+      // Generate agent hub token — ONLY after successful intake form completion
+      await generateHubToken({
+        agentId: agent.id,
+        npn: formData.npn || null,
+        firstName: agent.first_name,
+        lastName: agent.last_name,
       });
 
       navigate('/thank-you');

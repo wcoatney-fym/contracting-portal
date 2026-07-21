@@ -23,6 +23,8 @@ import { AgencyIntake } from './pages/AgencyIntake';
 import { ContractingCard } from './pages/ContractingCard';
 import { ContractingPortalView } from './pages/ContractingPortalView';
 import { AgencyPortal } from './pages/AgencyPortal';
+import { AgentHub } from './pages/hub/AgentHub';
+import { BiancaHub } from './pages/hub/BiancaHub';
 import { supabase } from './lib/supabase';
 import { AlertCircle } from 'lucide-react';
 
@@ -162,6 +164,8 @@ function App() {
           <Route path="/direct-pay-hip" element={<HIP />} />
           <Route path="/telesales-hip" element={<HIP />} />
           <Route path="/thank-you" element={<ThankYou />} />
+          <Route path="/hub" element={<BiancaHub />} />
+          <Route path="/hub/:token" element={<AgentHub />} />
           <Route path="/fym-agent-resources" element={<FymAgentResources />} />
           <Route path="/agency-intake" element={<AgencyIntake />} />
           <Route path="/contracting-card" element={<ContractingCard />} />
