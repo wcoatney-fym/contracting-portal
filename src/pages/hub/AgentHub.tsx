@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import {
-  CheckCircle2, Circle, Lock, ExternalLink, CalendarCheck,
-  MessageSquare, BookOpen, Video, FileText, Zap, Trophy, ChevronRight
+  CheckCircle2, Lock, ExternalLink, CalendarCheck,
+  MessageSquare, BookOpen, Video, FileText, Zap, Trophy, AlertCircle
 } from 'lucide-react';
 import type { AgentPipelineStage } from '../../lib/supabase';
+import { WritingNumberUpload } from './WritingNumberUpload';
 
 // ── Contracting stages ──────────────────────────────────────────────────────
 const STAGE_CHECKLIST: {
@@ -34,6 +35,17 @@ type HubAgent = {
   agency: string | null;
   stage: AgentPipelineStage | null;
   is_rts: boolean;
+};
+
+type WnSubmission = {
+  id: string;
+  carrier: 'UNL' | 'GTL';
+  writing_number: string | null;
+  ai_extracted_number: string | null;
+  submission_method: 'typed' | 'image';
+  status: 'pending' | 'verified' | 'rejected';
+  review_note: string | null;
+  created_at: string;
 };
 
 type TrainingContent = {
@@ -76,6 +88,8 @@ export const AgentHub: React.FC = () => {
   const [training, setTraining]         = useState<TrainingContent[]>([]);
   const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
   const [completedContent, setCompletedContent] = useState<Set<string>>(new Set());
+  const [wnSubmissions, setWnSubmissions] = useState<WnSubmission[]>([]);
+  const [verifiedCarriers, setVerifiedCarriers] = useState<Set<'UNL' | 'GTL'>>(new Set());
   const [activeQuiz, setActiveQuiz]     = useState<TrainingContent | null>(null);
   const [quizAnswers, setQuizAnswers]   = useState<number[]>([]);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
@@ -113,12 +127,30 @@ export const AgentHub: React.FC = () => {
       (eventRows ?? []).map(e => e.content_id).filter(Boolean) as string[]
     );
 
+    // Load writing number submissions and verified lob_assignments
+    const [{ data: wnSubRows }, { data: lobRows }] = await Promise.all([
+      supabase.from('agent_writing_number_submissions')
+        .select('id,carrier,writing_number,ai_extracted_number,submission_method,status,review_note,created_at')
+        .eq('agent_id', tokenRow.agent_id)
+        .order('created_at', { ascending: false }),
+      supabase.from('agent_lob_assignments')
+        .select('carrier,verified')
+        .eq('agent_id', tokenRow.agent_id)
+        .eq('verified', true),
+    ]);
+
+    const verified = new Set<'UNL' | 'GTL'>(
+      (lobRows ?? []).map(r => r.carrier as 'UNL' | 'GTL')
+    );
+
     setAgent({ agent_id: tokenRow.agent_id, agent_slug: tokenRow.agent_slug, token: tokenRow.token,
       first_name: agentRow?.first_name ?? null, last_name: agentRow?.last_name ?? null,
       agency: agentRow?.agency ?? null, stage, is_rts: isRts });
     setTraining(contentRows ?? []);
     setLiveSessions(sessionRows ?? []);
     setCompletedContent(completed);
+    setWnSubmissions((wnSubRows ?? []) as WnSubmission[]);
+    setVerifiedCarriers(verified);
     setLoading(false);
   };
 
@@ -324,31 +356,66 @@ export const AgentHub: React.FC = () => {
           </div>
         )}
 
-        {/* ── Schedule Test with Tyler ────────────────────────────────────────── */}
+        {/* ── Writing Number Upload ───────────────────────────────────────────── */}
         {!agent.is_rts && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
-            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
-              <CalendarCheck className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm font-bold text-gray-900">Test with Tyler</h2>
-                <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Zap className="w-3 h-3" /> Required for RTS
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Complete your product knowledge check with Tyler before you can be cleared to sell.</p>
-              <button
-                onClick={handleTylerClick}
-                className="mt-3 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
-              >
-                <CalendarCheck className="w-3.5 h-3.5" />
-                Book Your Slot
-                {TYLER_BOOKING_URL === '#' && <span className="text-indigo-300">(Coming soon)</span>}
-              </button>
-            </div>
-          </div>
+          <WritingNumberUpload
+            agentId={agent.agent_id}
+            verifiedCarriers={verifiedCarriers}
+            existingSubmissions={wnSubmissions}
+            onSubmissionAdded={(sub) => {
+              setWnSubmissions(prev => [sub, ...prev]);
+            }}
+          />
         )}
+
+        {/* ── Schedule Test with Tyler ────────────────────────────────────────── */}
+        {!agent.is_rts && (() => {
+          const hasVerified = verifiedCarriers.size > 0;
+          return hasVerified ? (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
+              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
+                <CalendarCheck className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm font-bold text-gray-900">Test with Tyler</h2>
+                  <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Zap className="w-3 h-3" /> Required for RTS
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Complete your product knowledge check with Tyler before you can be cleared to sell.</p>
+                <button
+                  onClick={handleTylerClick}
+                  className="mt-3 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  <CalendarCheck className="w-3.5 h-3.5" />
+                  Book Your Slot
+                  {TYLER_BOOKING_URL === '#' && <span className="text-indigo-300">(Coming soon)</span>}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-2xl border border-gray-200 border-dashed p-5 flex items-start gap-4">
+              <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5 text-gray-300" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm font-bold text-gray-400">Test with Tyler</h2>
+                  <span className="text-xs font-semibold bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Zap className="w-3 h-3" /> Required for RTS
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <p className="text-xs text-amber-700 font-medium">
+                    Submit your writing number(s) above and wait for contracting to verify before scheduling.
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Live Trainings ───────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
