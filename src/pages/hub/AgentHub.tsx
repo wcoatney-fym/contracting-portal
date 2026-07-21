@@ -1,21 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { CheckCircle2, Circle, Clock, ExternalLink, CalendarCheck, MessageSquare, Upload, BookOpen, Video, FileText } from 'lucide-react';
+import {
+  CheckCircle2, Circle, Lock, ExternalLink, CalendarCheck,
+  MessageSquare, BookOpen, Video, FileText, Zap, Trophy, ChevronRight
+} from 'lucide-react';
 import type { AgentPipelineStage } from '../../lib/supabase';
 
-const STAGE_CHECKLIST: { key: AgentPipelineStage; label: string; description: string }[] = [
-  { key: 'hip_broker', label: 'Intake Form Submitted', description: 'Your intake form has been received.' },
-  { key: 'iaa', label: 'IAA Sent', description: 'Your Independent Agent Agreement is on its way.' },
-  { key: 'signed_iaa', label: 'IAA Signed', description: 'Sign and return your IAA to the contracting team.' },
-  { key: 'bill_com', label: 'Bill.com Setup', description: 'Set up your Bill.com account for commission payments.' },
-  { key: 'crm', label: 'CRM Setup', description: 'Your CRM access is being configured.' },
-  { key: 'in_contracting', label: 'In Contracting (Carriers)', description: 'Your carrier appointments are being processed.' },
-  { key: 'rts', label: 'Ready to Sell', description: "You're appointed and cleared to write business!" },
+// ── Contracting stages ──────────────────────────────────────────────────────
+const STAGE_CHECKLIST: {
+  key: AgentPipelineStage;
+  label: string;
+  subtitle: string;
+}[] = [
+  { key: 'hip_broker',      label: 'Intake Form Submitted',       subtitle: 'Your intake form has been received by the contracting team.' },
+  { key: 'iaa',             label: 'IAA Sent',                    subtitle: 'Your Independent Agent Agreement is on its way to you.' },
+  { key: 'signed_iaa',      label: 'IAA Signed',                  subtitle: 'Sign and return your IAA to the contracting team.' },
+  { key: 'bill_com',        label: 'Bill.com Setup',              subtitle: 'Set up your Bill.com account so you can receive commissions.' },
+  { key: 'crm',             label: 'CRM Setup',                   subtitle: 'Your CRM tools are being configured.' },
+  { key: 'in_contracting',  label: 'In Contracting (Carriers)',   subtitle: 'Your carrier appointments are being processed.' },
+  { key: 'rts',             label: 'Ready to Sell',               subtitle: "You're fully appointed and cleared to write business!" },
 ];
 
-const TYLER_BOOKING_URL = '#'; // Placeholder — replace with Tyler's Outlook Bookings URL
+const TYLER_BOOKING_URL = '#'; // Replace with Tyler's Outlook Bookings URL
 
+// ── Types ───────────────────────────────────────────────────────────────────
 type HubAgent = {
   agent_id: string;
   agent_slug: string;
@@ -44,94 +53,78 @@ type LiveSession = {
   join_url: string;
 };
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function formatSessionTime(iso: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  }).format(new Date(iso)) + ' CT';
+}
+
+function stageIndex(stage: AgentPipelineStage | null): number {
+  if (!stage) return -1;
+  return STAGE_CHECKLIST.findIndex(s => s.key === stage);
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 export const AgentHub: React.FC = () => {
   const { token } = useParams<{ token: string }>();
-  const [agent, setAgent] = useState<HubAgent | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [training, setTraining] = useState<TrainingContent[]>([]);
+  const [agent, setAgent]               = useState<HubAgent | null>(null);
+  const [loading, setLoading]           = useState(true);
+  const [notFound, setNotFound]         = useState(false);
+  const [training, setTraining]         = useState<TrainingContent[]>([]);
   const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
-  const [activeQuiz, setActiveQuiz] = useState<TrainingContent | null>(null);
-  const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
+  const [completedContent, setCompletedContent] = useState<Set<string>>(new Set());
+  const [activeQuiz, setActiveQuiz]     = useState<TrainingContent | null>(null);
+  const [quizAnswers, setQuizAnswers]   = useState<number[]>([]);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
-  const [quizScore, setQuizScore] = useState<number | null>(null);
+  const [quizScore, setQuizScore]       = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!token) { setNotFound(true); setLoading(false); return; }
-    loadHub();
-  }, [token]);
+  useEffect(() => { if (token) loadHub(); else { setNotFound(true); setLoading(false); } }, [token]);
 
   const loadHub = async () => {
-    // Look up token → agent
     const { data: tokenRow } = await supabase
-      .from('agent_hub_tokens')
-      .select('agent_id, agent_slug, token')
-      .eq('token', token)
-      .eq('is_active', true)
-      .maybeSingle();
-
+      .from('agent_hub_tokens').select('agent_id, agent_slug, token')
+      .eq('token', token!).eq('is_active', true).maybeSingle();
     if (!tokenRow) { setNotFound(true); setLoading(false); return; }
 
-    // Get agent info + pipeline stage
-    const { data: agentRow } = await supabase
-      .from('agents')
-      .select('first_name, last_name, agency')
-      .eq('id', tokenRow.agent_id)
-      .maybeSingle();
-
-    const { data: pipelineRow } = await supabase
-      .from('agent_pipeline')
-      .select('stage')
-      .eq('agent_id', tokenRow.agent_id)
-      .maybeSingle();
+    const [
+      { data: agentRow },
+      { data: pipelineRow },
+      { data: contentRows },
+      { data: sessionRows },
+      { data: eventRows },
+    ] = await Promise.all([
+      supabase.from('agents').select('first_name, last_name, agency').eq('id', tokenRow.agent_id).maybeSingle(),
+      supabase.from('agent_pipeline').select('stage').eq('agent_id', tokenRow.agent_id).maybeSingle(),
+      supabase.from('agent_training_content').select('*').eq('is_active', true).order('display_order'),
+      supabase.from('agent_live_sessions').select('*').eq('is_active', true)
+        .gte('session_datetime', new Date().toISOString()).order('session_datetime').limit(6),
+      supabase.from('agent_training_events').select('content_id, event_type')
+        .eq('agent_id', tokenRow.agent_id).in('event_type', ['quiz_pass', 'video_view']),
+    ]);
 
     const stage = (pipelineRow?.stage ?? null) as AgentPipelineStage | null;
-    const isRts = stage === 'rts' || stage === 'hip_broker_ready' || stage === 'hip_career_ready' || stage === 'actively_selling';
+    const isRts = ['rts','hip_broker_ready','hip_career_ready','actively_selling'].includes(stage ?? '');
 
-    setAgent({
-      agent_id: tokenRow.agent_id,
-      agent_slug: tokenRow.agent_slug,
-      token: tokenRow.token,
-      first_name: agentRow?.first_name ?? null,
-      last_name: agentRow?.last_name ?? null,
-      agency: agentRow?.agency ?? null,
-      stage,
-      is_rts: isRts,
-    });
+    // Track which content ids have been completed (quiz passed or video viewed)
+    const completed = new Set<string>(
+      (eventRows ?? []).map(e => e.content_id).filter(Boolean) as string[]
+    );
 
-    // Load training content
-    const { data: contentRows } = await supabase
-      .from('agent_training_content')
-      .select('*')
-      .eq('is_active', true)
-      .order('display_order', { ascending: true });
+    setAgent({ agent_id: tokenRow.agent_id, agent_slug: tokenRow.agent_slug, token: tokenRow.token,
+      first_name: agentRow?.first_name ?? null, last_name: agentRow?.last_name ?? null,
+      agency: agentRow?.agency ?? null, stage, is_rts: isRts });
     setTraining(contentRows ?? []);
-
-    // Load upcoming live sessions
-    const { data: sessionRows } = await supabase
-      .from('agent_live_sessions')
-      .select('*')
-      .eq('is_active', true)
-      .gte('session_datetime', new Date().toISOString())
-      .order('session_datetime', { ascending: true })
-      .limit(5);
     setLiveSessions(sessionRows ?? []);
-
+    setCompletedContent(completed);
     setLoading(false);
   };
 
   const logEvent = async (eventType: string, extras: Record<string, unknown> = {}) => {
     if (!agent) return;
-    await supabase.from('agent_training_events').insert({
-      agent_id: agent.agent_id,
-      event_type: eventType,
-      ...extras,
-    });
-  };
-
-  const currentStageIndex = (stage: AgentPipelineStage | null) => {
-    if (!stage) return -1;
-    return STAGE_CHECKLIST.findIndex(s => s.key === stage);
+    await supabase.from('agent_training_events').insert({ agent_id: agent.agent_id, event_type: eventType, ...extras });
   };
 
   const handleTylerClick = () => {
@@ -139,227 +132,325 @@ export const AgentHub: React.FC = () => {
     if (TYLER_BOOKING_URL !== '#') window.open(TYLER_BOOKING_URL, '_blank');
   };
 
-  const handleContentClick = (content: TrainingContent) => {
-    logEvent('video_view', { content_id: content.id, content_title: content.title });
-    if (content.content_url) window.open(content.content_url, '_blank');
+  const handleContentClick = (c: TrainingContent) => {
+    logEvent('video_view', { content_id: c.id, content_title: c.title });
+    setCompletedContent(prev => new Set([...prev, c.id]));
+    if (c.content_url) window.open(c.content_url, '_blank');
   };
 
-  const handleLiveSessionClick = (session: LiveSession) => {
-    logEvent('live_training_click', { content_id: session.id, content_title: session.title });
-    window.open(session.join_url, '_blank');
+  const handleLiveClick = (s: LiveSession) => {
+    logEvent('live_training_click', { content_id: s.id, content_title: s.title });
+    window.open(s.join_url, '_blank');
   };
 
-  const startQuiz = (content: TrainingContent) => {
-    setActiveQuiz(content);
-    setQuizAnswers(new Array(content.quiz_questions.length).fill(-1));
+  const startQuiz = (c: TrainingContent) => {
+    setActiveQuiz(c);
+    setQuizAnswers(new Array(c.quiz_questions.length).fill(-1));
     setQuizSubmitted(false);
     setQuizScore(null);
   };
 
   const submitQuiz = async () => {
     if (!activeQuiz) return;
-    const correct = activeQuiz.quiz_questions.reduce((acc, q, i) => acc + (quizAnswers[i] === q.correct_index ? 1 : 0), 0);
+    const correct = activeQuiz.quiz_questions.reduce(
+      (a, q, i) => a + (quizAnswers[i] === q.correct_index ? 1 : 0), 0
+    );
     const score = Math.round((correct / activeQuiz.quiz_questions.length) * 100);
     setQuizScore(score);
     setQuizSubmitted(true);
-    await logEvent('quiz_attempt', {
-      content_id: activeQuiz.id,
-      content_title: activeQuiz.title,
-      quiz_score: score,
-      quiz_max_score: 100,
-    });
-    if (score >= 80) await logEvent('quiz_pass', { content_id: activeQuiz.id, content_title: activeQuiz.title });
+    await logEvent('quiz_attempt', { content_id: activeQuiz.id, content_title: activeQuiz.title, quiz_score: score, quiz_max_score: 100 });
+    if (score >= 80) {
+      await logEvent('quiz_pass', { content_id: activeQuiz.id });
+      setCompletedContent(prev => new Set([...prev, activeQuiz.id]));
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-steel-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-navy-600" />
-      </div>
-    );
-  }
+  // ── Loading / not found ──────────────────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen bg-steel-50 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-navy-600" />
+    </div>
+  );
 
-  if (notFound || !agent) {
-    return (
-      <div className="min-h-screen bg-steel-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Hub Not Found</h2>
-          <p className="text-gray-500 text-sm">This link doesn't exist or has been deactivated. Contact <a href="mailto:Contracting@teamfym.com" className="text-navy-600 hover:underline">Contracting@teamfym.com</a></p>
-        </div>
+  if (notFound || !agent) return (
+    <div className="min-h-screen bg-steel-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Hub Not Found</h2>
+        <p className="text-gray-500 text-sm">
+          This link doesn't exist or has been deactivated.<br />
+          Contact <a href="mailto:Contracting@teamfym.com" className="text-navy-600 hover:underline">Contracting@teamfym.com</a>
+        </p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  const stageIdx = currentStageIndex(agent.stage);
+  const stageIdx        = stageIndex(agent.stage);
+  const completedStages = stageIdx + 1;
+  const totalStages     = STAGE_CHECKLIST.length;
+  const contractPct     = Math.round((completedStages / totalStages) * 100);
+
+  const completedModules = training.filter(c => completedContent.has(c.id)).length;
+  const totalModules     = training.length;
+  const trainingPct      = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+
   const firstName = agent.first_name ?? 'Agent';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-navy-50 to-steel-50">
-      {/* Header */}
-      <div className="bg-navy-700 text-white py-8 px-4">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-navy-200 text-sm mb-1">FYM Financial</p>
-          <h1 className="text-2xl font-bold">Welcome, {firstName}!</h1>
-          {agent.agency && <p className="text-navy-200 mt-1 text-sm">{agent.agency}</p>}
+    <div className="min-h-screen bg-gray-50">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="bg-navy-800 text-white px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          <p className="text-navy-300 text-xs uppercase tracking-widest mb-1">FYM Financial</p>
+          <h1 className="text-2xl font-bold">Hey {firstName}! 👋</h1>
+          {agent.agency && <p className="text-navy-300 text-sm mt-0.5">{agent.agency}</p>}
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      {/* ── Progress Summary Bar ─────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-gray-100 px-4 py-5">
+        <div className="max-w-2xl mx-auto grid grid-cols-2 gap-4">
 
-        {/* ── Contracting Progress (hidden once RTS+) ── */}
+          {/* Contracting */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Contracting</p>
+              <p className="text-xs font-bold text-navy-700">{completedStages}/{totalStages}</p>
+            </div>
+            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-navy-600 rounded-full transition-all duration-500"
+                style={{ width: `${Math.max(contractPct, 4)}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              {agent.is_rts ? '🎉 Ready to Sell' : `Next: ${STAGE_CHECKLIST[stageIdx + 1]?.label ?? '—'}`}
+            </p>
+          </div>
+
+          {/* Training */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Training</p>
+              <p className="text-xs font-bold text-navy-700">
+                {totalModules > 0 ? `${completedModules}/${totalModules}` : '—'}
+              </p>
+            </div>
+            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: totalModules > 0 ? `${Math.max(trainingPct, 4)}%` : '0%' }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              {totalModules === 0
+                ? 'Content coming soon'
+                : completedModules === totalModules
+                  ? '✅ All modules complete'
+                  : `${totalModules - completedModules} module${totalModules - completedModules !== 1 ? 's' : ''} remaining`
+              }
+            </p>
+          </div>
+
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+
+        {/* ── RTS Banner ─────────────────────────────────────────────────────── */}
+        {agent.is_rts && (
+          <div className="bg-emerald-600 rounded-2xl p-5 text-white flex items-center gap-4">
+            <Trophy className="w-10 h-10 text-yellow-300 shrink-0" />
+            <div>
+              <p className="font-bold text-lg">You're Ready to Sell!</p>
+              <p className="text-emerald-100 text-sm">Appointments are active — go write business.</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Contracting Steps ───────────────────────────────────────────────── */}
         {!agent.is_rts && (
-          <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-navy-600" /> Contracting Progress
-            </h2>
-            <ol className="space-y-3">
-              {STAGE_CHECKLIST.map((s, idx) => {
-                const done = idx <= stageIdx;
-                const current = idx === stageIdx;
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-gray-900">Contracting Steps</h2>
+              <span className="text-xs text-gray-400">{completedStages} of {totalStages} complete</span>
+            </div>
+
+            {/* Stepper */}
+            <div className="px-5 py-4">
+              {STAGE_CHECKLIST.map((s, i) => {
+                const done    = i < stageIdx;
+                const current = i === stageIdx;
+                const locked  = i > stageIdx;
+                const isLast  = i === STAGE_CHECKLIST.length - 1;
+
                 return (
-                  <li key={s.key} className={`flex items-start gap-3 rounded-xl px-4 py-3 ${current ? 'bg-navy-50 border border-navy-200' : ''}`}>
-                    <div className="mt-0.5">
-                      {done
-                        ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                        : <Circle className="w-5 h-5 text-gray-300" />
-                      }
+                  <div key={s.key} className="flex gap-4">
+                    {/* Line + icon column */}
+                    <div className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 z-10
+                        ${done    ? 'bg-emerald-500 border-emerald-500' : ''}
+                        ${current ? 'bg-white border-navy-600' : ''}
+                        ${locked  ? 'bg-white border-gray-200' : ''}
+                      `}>
+                        {done
+                          ? <CheckCircle2 className="w-4 h-4 text-white" />
+                          : current
+                            ? <div className="w-2.5 h-2.5 rounded-full bg-navy-600" />
+                            : <Lock className="w-3.5 h-3.5 text-gray-300" />
+                        }
+                      </div>
+                      {!isLast && (
+                        <div className={`w-0.5 flex-1 my-1 ${done ? 'bg-emerald-400' : 'bg-gray-200'}`} style={{ minHeight: '20px' }} />
+                      )}
                     </div>
-                    <div>
-                      <p className={`text-sm font-semibold ${done ? 'text-gray-900' : 'text-gray-400'}`}>{s.label}</p>
-                      {current && <p className="text-xs text-navy-600 mt-0.5">{s.description}</p>}
+
+                    {/* Content */}
+                    <div className={`pb-5 flex-1 ${isLast ? 'pb-1' : ''}`}>
+                      <p className={`text-sm font-semibold leading-none mt-1.5
+                        ${done ? 'text-emerald-700' : current ? 'text-navy-800' : 'text-gray-400'}
+                      `}>
+                        {s.label}
+                        {done && <span className="ml-2 text-xs font-normal text-emerald-500">✓ Done</span>}
+                      </p>
+                      {current && (
+                        <p className="text-xs text-gray-500 mt-1">{s.subtitle}</p>
+                      )}
                     </div>
-                  </li>
+                  </div>
                 );
               })}
-            </ol>
-          </section>
+            </div>
+          </div>
         )}
 
-        {/* ── RTS Banner ── */}
-        {agent.is_rts && (
-          <section className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center">
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-            <h2 className="text-xl font-bold text-emerald-800">You're Ready to Sell! 🎉</h2>
-            <p className="text-emerald-700 text-sm mt-1">Your appointments are active. Start writing business.</p>
-          </section>
-        )}
-
-        {/* ── Schedule Test with Tyler ── */}
+        {/* ── Schedule Test with Tyler ────────────────────────────────────────── */}
         {!agent.is_rts && (
-          <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <CalendarCheck className="w-5 h-5 text-navy-600" /> Schedule Your Test with Tyler
-            </h2>
-            <p className="text-sm text-gray-500 mb-4">Before you can be marked Ready to Sell, you'll complete a product knowledge check with Tyler.</p>
-            <button
-              onClick={handleTylerClick}
-              className="inline-flex items-center gap-2 bg-navy-700 hover:bg-navy-800 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
-            >
-              <CalendarCheck className="w-4 h-4" /> Book Your Test with Tyler
-              {TYLER_BOOKING_URL === '#' && <span className="text-navy-300 text-xs ml-1">(Coming soon)</span>}
-            </button>
-          </section>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
+              <CalendarCheck className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-gray-900">Test with Tyler</h2>
+                <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> Required for RTS
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Complete your product knowledge check with Tyler before you can be cleared to sell.</p>
+              <button
+                onClick={handleTylerClick}
+                className="mt-3 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                <CalendarCheck className="w-3.5 h-3.5" />
+                Book Your Slot
+                {TYLER_BOOKING_URL === '#' && <span className="text-indigo-300">(Coming soon)</span>}
+              </button>
+            </div>
+          </div>
         )}
 
-        {/* ── Live Training Sessions ── */}
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <Video className="w-5 h-5 text-navy-600" /> Upcoming Live Trainings
-          </h2>
-          {liveSessions.length === 0 ? (
-            <p className="text-sm text-gray-400">No upcoming sessions scheduled. Check back soon.</p>
-          ) : (
-            <ul className="space-y-3">
-              {liveSessions.map(session => (
-                <li key={session.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{session.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {new Intl.DateTimeFormat('en-US', {
-                        timeZone: 'America/Chicago',
-                        weekday: 'short', month: 'short', day: 'numeric',
-                        hour: 'numeric', minute: '2-digit',
-                      }).format(new Date(session.session_datetime))} CT
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleLiveSessionClick(session)}
-                    className="inline-flex items-center gap-1 text-navy-600 hover:text-navy-800 text-sm font-medium"
-                  >
-                    Join <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        {/* ── Live Trainings ───────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="text-sm font-bold text-gray-900">Upcoming Live Trainings</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {liveSessions.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-gray-400">No upcoming sessions — check back soon.</p>
+            ) : liveSessions.map(s => (
+              <div key={s.id} className="flex items-center gap-3 px-5 py-3.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{s.title}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{formatSessionTime(s.session_datetime)}</p>
+                </div>
+                <button
+                  onClick={() => handleLiveClick(s)}
+                  className="shrink-0 inline-flex items-center gap-1 text-navy-600 hover:text-navy-800 text-xs font-semibold border border-navy-200 hover:border-navy-400 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Join <ExternalLink className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
 
-        {/* ── Training Library ── */}
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-navy-600" /> Training Library
-          </h2>
+        {/* ── Training Library ─────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-gray-900">Training Library</h2>
+            {totalModules > 0 && (
+              <span className="text-xs text-gray-400">{completedModules}/{totalModules} complete</span>
+            )}
+          </div>
           {training.length === 0 ? (
-            <p className="text-sm text-gray-400">Training content will be available here soon.</p>
+            <p className="px-5 py-4 text-sm text-gray-400">Training content coming soon.</p>
           ) : (
-            <div className="space-y-4">
-              {training.map(content => (
-                <div key={content.id} className="rounded-xl border border-gray-100 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      {content.content_type === 'video'
-                        ? <Video className="w-5 h-5 text-navy-400 mt-0.5 shrink-0" />
-                        : <FileText className="w-5 h-5 text-navy-400 mt-0.5 shrink-0" />
+            <div className="divide-y divide-gray-50">
+              {training.map(c => {
+                const done = completedContent.has(c.id);
+                return (
+                  <div key={c.id} className={`flex items-start gap-3 px-5 py-4 ${done ? 'bg-emerald-50/40' : ''}`}>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${done ? 'bg-emerald-100' : 'bg-gray-100'}`}>
+                      {done
+                        ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        : c.content_type === 'video'
+                          ? <Video className="w-4 h-4 text-gray-400" />
+                          : <FileText className="w-4 h-4 text-gray-400" />
                       }
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{content.title}</p>
-                        {content.description && <p className="text-xs text-gray-500 mt-0.5">{content.description}</p>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold ${done ? 'text-emerald-700' : 'text-gray-900'}`}>{c.title}</p>
+                      {c.description && <p className="text-xs text-gray-500 mt-0.5">{c.description}</p>}
+                      <div className="flex items-center gap-4 mt-2">
+                        {c.content_url && (
+                          <button
+                            onClick={() => handleContentClick(c)}
+                            className="inline-flex items-center gap-1 text-navy-600 hover:text-navy-800 text-xs font-medium"
+                          >
+                            {c.content_type === 'video' ? 'Watch' : 'Open'} <ExternalLink className="w-3 h-3" />
+                          </button>
+                        )}
+                        {c.has_quiz && c.quiz_questions.length > 0 && (
+                          <button
+                            onClick={() => startQuiz(c)}
+                            className={`inline-flex items-center gap-1 text-xs font-medium ${done ? 'text-emerald-600 hover:text-emerald-800' : 'text-amber-600 hover:text-amber-800'}`}
+                          >
+                            <BookOpen className="w-3 h-3" />
+                            {done ? 'Retake Quiz' : 'Take Quiz'}
+                          </button>
+                        )}
                       </div>
                     </div>
-                    {content.content_url && (
-                      <button
-                        onClick={() => handleContentClick(content)}
-                        className="shrink-0 inline-flex items-center gap-1 text-navy-600 hover:text-navy-800 text-sm font-medium"
-                      >
-                        Open <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
+                    {done && (
+                      <span className="shrink-0 text-xs text-emerald-600 font-medium mt-1">Complete</span>
                     )}
                   </div>
-                  {content.has_quiz && content.quiz_questions.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <button
-                        onClick={() => startQuiz(content)}
-                        className="text-xs font-medium text-navy-600 hover:text-navy-800"
-                      >
-                        Take Quiz →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
-        </section>
+        </div>
 
-        {/* ── AI Chatbot (ElevenLabs) ── */}
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-navy-600" /> Ask a Question
-          </h2>
-          <p className="text-sm text-gray-500 mb-4">Have questions about contracting, products, or your next step? Ask our AI assistant.</p>
-          <div id="elevenlabs-chatbot-widget" className="w-full min-h-[400px] rounded-xl overflow-hidden border border-gray-100">
-            {/* ElevenLabs widget mounts here — configured via VITE_ELEVENLABS_AGENT_ID */}
+        {/* ── AI Chatbot ───────────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <MessageSquare className="w-4 h-4 text-navy-600" />
+            <h2 className="text-sm font-bold text-gray-900">Ask Anything</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">Questions about contracting, products, or your next step? Our AI assistant is available 24/7.</p>
+          <div className="rounded-xl overflow-hidden border border-gray-100 min-h-[380px]">
             <elevenlabs-convai agent-id={import.meta.env.VITE_ELEVENLABS_AGENT_ID}></elevenlabs-convai>
           </div>
-        </section>
+        </div>
 
       </div>
 
-      {/* Quiz Modal */}
+      {/* ── Quiz Modal ─────────────────────────────────────────────────────────── */}
       {activeQuiz && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">{activeQuiz.title} — Quiz</h3>
+            <h3 className="text-base font-bold text-gray-900 mb-5">{activeQuiz.title} — Quiz</h3>
             {!quizSubmitted ? (
               <>
                 <div className="space-y-5">
@@ -368,18 +459,11 @@ export const AgentHub: React.FC = () => {
                       <p className="text-sm font-semibold text-gray-900 mb-2">{qi + 1}. {q.question}</p>
                       <div className="space-y-2">
                         {q.options.map((opt, oi) => (
-                          <label key={oi} className={`flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer border ${quizAnswers[qi] === oi ? 'border-navy-400 bg-navy-50' : 'border-gray-200'}`}>
-                            <input
-                              type="radio"
-                              name={`q-${qi}`}
-                              checked={quizAnswers[qi] === oi}
-                              onChange={() => {
-                                const updated = [...quizAnswers];
-                                updated[qi] = oi;
-                                setQuizAnswers(updated);
-                              }}
-                              className="accent-navy-600"
-                            />
+                          <label key={oi} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 cursor-pointer border transition-colors
+                            ${quizAnswers[qi] === oi ? 'border-navy-400 bg-navy-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                            <input type="radio" name={`q-${qi}`} checked={quizAnswers[qi] === oi}
+                              onChange={() => { const u = [...quizAnswers]; u[qi] = oi; setQuizAnswers(u); }}
+                              className="accent-navy-600" />
                             <span className="text-sm text-gray-700">{opt}</span>
                           </label>
                         ))}
@@ -388,21 +472,21 @@ export const AgentHub: React.FC = () => {
                   ))}
                 </div>
                 <div className="flex gap-3 mt-6">
-                  <button onClick={() => setActiveQuiz(null)} className="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                  <button
-                    onClick={submitQuiz}
-                    disabled={quizAnswers.includes(-1)}
-                    className="flex-1 px-4 py-2 rounded-xl bg-navy-700 text-white text-sm font-semibold hover:bg-navy-800 disabled:opacity-40"
-                  >
-                    Submit Quiz
+                  <button onClick={() => setActiveQuiz(null)} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                  <button onClick={submitQuiz} disabled={quizAnswers.includes(-1)}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-navy-700 text-white text-sm font-semibold hover:bg-navy-800 disabled:opacity-40">
+                    Submit
                   </button>
                 </div>
               </>
             ) : (
-              <div className="text-center py-4">
-                <div className={`text-4xl font-bold mb-2 ${(quizScore ?? 0) >= 80 ? 'text-emerald-600' : 'text-amber-500'}`}>{quizScore}%</div>
-                <p className="text-sm text-gray-600 mb-4">{(quizScore ?? 0) >= 80 ? 'Great job! You passed.' : 'Keep studying and try again.'}</p>
-                <button onClick={() => setActiveQuiz(null)} className="px-6 py-2 rounded-xl bg-navy-700 text-white text-sm font-semibold hover:bg-navy-800">Done</button>
+              <div className="text-center py-6">
+                <div className={`text-5xl font-extrabold mb-2 ${(quizScore ?? 0) >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{quizScore}%</div>
+                {(quizScore ?? 0) >= 80
+                  ? <p className="text-emerald-700 font-semibold">Passed! Great work.</p>
+                  : <p className="text-amber-700 font-semibold">Need 80% to pass — review and try again.</p>
+                }
+                <button onClick={() => setActiveQuiz(null)} className="mt-5 px-6 py-2.5 rounded-xl bg-navy-700 text-white text-sm font-semibold hover:bg-navy-800">Done</button>
               </div>
             )}
           </div>
