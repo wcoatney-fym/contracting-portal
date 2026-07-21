@@ -356,8 +356,8 @@ export const AgentHub: React.FC = () => {
           </div>
         )}
 
-        {/* ── Writing Number Upload ───────────────────────────────────────────── */}
-        {!agent.is_rts && (
+        {/* ── Writing Number Upload — only after IAA + Bill.com complete (stageIdx ≥ 3) ── */}
+        {!agent.is_rts && stageIdx >= 3 && (
           <WritingNumberUpload
             agentId={agent.agent_id}
             verifiedCarriers={verifiedCarriers}
