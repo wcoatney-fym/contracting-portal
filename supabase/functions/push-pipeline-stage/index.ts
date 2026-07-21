@@ -24,7 +24,11 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { record_id, new_stage } = await req.json();
+    const { record_id, new_stage, updated_by, updated_by_source } = await req.json();
+
+    // Attribution: default based on source, overridable by caller
+    const attributedTo: string = updated_by ?? (updated_by_source === 'training_hub' ? 'Bianca' : 'Tracey');
+    const displayName: string = attributedTo;
 
     if (!record_id || !new_stage) {
       return new Response(
@@ -60,7 +64,8 @@ Deno.serve(async (req: Request) => {
         .from("agent_pipeline")
         .update({
           stage: new_stage,
-          last_updated_by: "ui",
+          last_updated_by: displayName,
+          last_updated_by_display: displayName,
           ghl_sync_status: "synced",
           stage_entered_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -95,7 +100,8 @@ Deno.serve(async (req: Request) => {
         .from("agent_pipeline")
         .update({
           stage: new_stage,
-          last_updated_by: "ui",
+          last_updated_by: displayName,
+          last_updated_by_display: displayName,
           ghl_sync_status: "synced",
           stage_entered_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -195,7 +201,8 @@ Deno.serve(async (req: Request) => {
       .update({
         stage: new_stage,
         ghl_stage_id: stageMap.ghl_stage_id,
-        last_updated_by: "ui",
+        last_updated_by: displayName,
+        last_updated_by_display: displayName,
         ghl_sync_status: "synced",
         stage_entered_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
