@@ -413,6 +413,18 @@ export const AgentPipelineBoard: React.FC = () => {
                         {record.last_updated_by && record.last_updated_by !== 'ghl_webhook' && (
                           <span className="text-[10px] text-steel-400">· {record.last_updated_by_display ?? record.last_updated_by}</span>
                         )}
+                        {record.updated_by_source && (
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+                            record.updated_by_source === 'training_hub' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                            record.updated_by_source === 'contracting_portal' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            record.updated_by_source === 'ghl_webhook' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                            'bg-gray-50 text-gray-600 border-gray-200'
+                          }`}>
+                            {record.updated_by_source === 'training_hub' ? 'Training' :
+                             record.updated_by_source === 'contracting_portal' ? 'Contracting' :
+                             record.updated_by_source === 'ghl_webhook' ? 'GHL' : record.updated_by_source}
+                          </span>
+                        )}
                       </div>
                       {pushingIds.has(record.id) ? (
                         <Loader2 className="w-3 h-3 text-navy-500 animate-spin" />

@@ -29,6 +29,7 @@ Deno.serve(async (req: Request) => {
     // Attribution: default based on source, overridable by caller
     const attributedTo: string = updated_by ?? (updated_by_source === 'training_hub' ? 'Bianca' : 'Tracey');
     const displayName: string = attributedTo;
+    const source: string = updated_by_source ?? 'contracting_portal';
 
     if (!record_id || !new_stage) {
       return new Response(
@@ -66,6 +67,7 @@ Deno.serve(async (req: Request) => {
           stage: new_stage,
           last_updated_by: displayName,
           last_updated_by_display: displayName,
+          updated_by_source: source,
           ghl_sync_status: "synced",
           stage_entered_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -102,6 +104,7 @@ Deno.serve(async (req: Request) => {
           stage: new_stage,
           last_updated_by: displayName,
           last_updated_by_display: displayName,
+          updated_by_source: source,
           ghl_sync_status: "synced",
           stage_entered_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -203,6 +206,7 @@ Deno.serve(async (req: Request) => {
         ghl_stage_id: stageMap.ghl_stage_id,
         last_updated_by: displayName,
         last_updated_by_display: displayName,
+        updated_by_source: source,
         ghl_sync_status: "synced",
         stage_entered_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

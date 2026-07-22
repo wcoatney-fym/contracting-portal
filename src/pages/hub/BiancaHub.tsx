@@ -60,7 +60,7 @@ export const BiancaHub: React.FC = () => {
       { data: lobRows },
     ] = await Promise.all([
       supabase.from('agents').select('id, first_name, last_name, email, phone, agency, npn, source, status, form_type, crm_onboarded, created_at').order('created_at', { ascending: false }),
-      supabase.from('agent_pipeline').select('id, agent_id, agent_name, first_name, last_name, email, phone, agency, stage, tags, last_updated_by, last_updated_by_display, stage_entered_at, updated_at').order('updated_at', { ascending: false }),
+      supabase.from('agent_pipeline').select('id, agent_id, agent_name, first_name, last_name, email, phone, agency, stage, tags, last_updated_by, last_updated_by_display, updated_by_source, stage_entered_at, updated_at').order('updated_at', { ascending: false }),
       supabase.from('agent_training_events').select('id, agent_id, event_type, content_id, content_title, quiz_score, created_at').order('created_at', { ascending: false }).limit(500),
       supabase.from('agent_training_content').select('id, title, description, content_type, content_format, carrier, category, has_quiz, display_order').eq('is_active', true).order('display_order'),
       supabase.from('agent_live_sessions').select('id, title, session_datetime, join_url, is_active').order('session_datetime', { ascending: false }),

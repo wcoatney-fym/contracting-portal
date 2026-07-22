@@ -53,8 +53,10 @@ export type PipelineAgent = {
   phone: string | null;
   agency: string | null;
   stage: AgentPipelineStage;
+  tags: string[];
   last_updated_by: string;
   last_updated_by_display: string | null;
+  updated_by_source: 'contracting_portal' | 'training_hub' | 'ghl_webhook' | 'system' | null;
   stage_entered_at: string;
   updated_at: string;
 };
