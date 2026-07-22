@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Building2, Lock, ShieldCheck, BarChart3, Users, MessageSquareText, Headphones as HeadphonesIcon, LogOut, AlertCircle, BookOpen, Clock, Upload, Package } from 'lucide-react';
+import { Building2, Lock, ShieldCheck, BarChart3, Users, MessageSquareText, Headphones as HeadphonesIcon, LogOut, AlertCircle, BookOpen, Clock, Upload, Package, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { CrmAgency } from '../lib/supabase';
 import { PortalDashboardTab } from './portal/PortalDashboardTab';
