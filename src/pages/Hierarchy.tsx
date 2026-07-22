@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GitBranch, Plus, Search, Building2, Users, ChevronDown, ChevronRight, Monitor, X, Trash2, AlertTriangle, Inbox, Check } from 'lucide-react';
+import { GitBranch, Plus, Search, Building2, Users, ChevronDown, ChevronRight, Monitor, X, Trash2, AlertTriangle, Inbox, Check, Copy, Link } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { CrmAgency, AgencyIntakeSubmission } from '../lib/supabase';
 import { AgencyDetailPanel } from './hierarchy/AgencyDetailPanel';
@@ -66,6 +66,26 @@ export const Hierarchy: React.FC = () => {
   // Parent-selection step before approval
   const [pendingApproval, setPendingApproval] = useState<AgencyIntakeSubmission | null>(null);
   const [pendingApprovalParentId, setPendingApprovalParentId] = useState<string>('');
+  const [intakeLinkCopied, setIntakeLinkCopied] = useState(false);
+
+  const handleCopyIntakeLink = async () => {
+    const url = `${window.location.origin}/agency-intake`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setIntakeLinkCopied(true);
+      setTimeout(() => setIntakeLinkCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setIntakeLinkCopied(true);
+      setTimeout(() => setIntakeLinkCopied(false), 2000);
+    }
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -323,13 +343,29 @@ export const Hierarchy: React.FC = () => {
             <p className="text-sm text-steel-500">Manage agencies, onboarding, and CRM enablement</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors font-medium text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Add Agency
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopyIntakeLink}
+            className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg transition-colors font-medium text-sm ${
+              intakeLinkCopied
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                : 'bg-white border-steel-300 text-steel-700 hover:bg-steel-50'
+            }`}
+          >
+            {intakeLinkCopied ? (
+              <><Check className="w-4 h-4" /> Copied!</>
+            ) : (
+              <><Link className="w-4 h-4" /> Copy Agency Intake Form Link</>
+            )}
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors font-medium text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Agency
+          </button>
+        </div>
       </div>
 
       {pendingIntakes.length > 0 && (
