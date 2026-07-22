@@ -168,7 +168,7 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, onStag
                     <CheckCircle2 className="w-3 h-3" /> {readyCount} ready to advance
                   </p>
                 )}
-                <div className="space-y-2">
+                <div className="space-y-2 overflow-y-auto max-h-[660px] pr-1">
                   {agents.length === 0 && (
                     <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 p-4 text-center text-xs text-gray-400">Empty</div>
                   )}
