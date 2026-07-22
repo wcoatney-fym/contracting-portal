@@ -459,6 +459,7 @@ function eventTypeLabel(type: string): string {
     case 'quiz_pass': return 'Quiz passed';
     case 'live_training_click': return 'Joined live session';
     case 'tyler_schedule_click': return 'Schedule w/ Tyler';
+    case 'step_self_complete': return 'Marked step complete';
     default: return type;
   }
 }

@@ -9,6 +9,8 @@ export type HubAgent = {
   agency: string | null;
   stage: AgentPipelineStage | null;
   is_rts: boolean;
+  completed_steps: Record<string, string>;
+  pipeline_id: string | null;
 };
 
 export type WnSubmission = {
