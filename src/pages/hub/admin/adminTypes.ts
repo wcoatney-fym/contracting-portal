@@ -45,15 +45,16 @@ export type LobAssignment = {
 
 export type PipelineAgent = {
   id: string;
-  agent_id: string | null;
   agent_name: string;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
   phone: string | null;
   agency: string | null;
+  agency_id: string | null;
   stage: AgentPipelineStage;
   tags: string[];
+  completed_steps: Record<string, string>;
   last_updated_by: string;
   last_updated_by_display: string | null;
   updated_by_source: 'contracting_portal' | 'training_hub' | 'ghl_webhook' | 'system' | null;
