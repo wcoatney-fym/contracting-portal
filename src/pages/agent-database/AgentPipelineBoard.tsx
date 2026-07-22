@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, RefreshCw, Clock, User, Building2, Filter, PenLine, Settings, Wifi, WifiOff, Loader2, Download, CheckCircle2, ArrowRight, ListChecks, FileCheck } from 'lucide-react';
+import { PipelineSummaryBar } from './PipelineSummaryBar';
 import { supabase } from '../../lib/supabase';
 import type { AgentPipelineRecord, AgentPipelineStage, AgentPipelineGhlConfig, AgentPipelineStageStep } from '../../lib/supabase';
 import { AgentPipelineDetailModal } from './AgentPipelineDetailModal';
@@ -314,6 +315,9 @@ export const AgentPipelineBoard: React.FC = () => {
         </span>
       </div>
 
+      {/* Summary Bar */}
+      <PipelineSummaryBar records={records} stageSteps={stageSteps} />
+
       {/* Board */}
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-3 min-w-max h-full">
@@ -346,8 +350,8 @@ export const AgentPipelineBoard: React.FC = () => {
                 )}
               </div>
 
-              {/* Cards */}
-              <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[calc(100vh-320px)]">
+              {/* Cards — max ~6 visible rows, then scroll */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-2" style={{ maxHeight: 'min(calc(100vh - 380px), 540px)' }}>
                 {col.records.map(record => {
                   const progress = computeProgress(record, stageSteps);
                   const health = stageHealth(record);
