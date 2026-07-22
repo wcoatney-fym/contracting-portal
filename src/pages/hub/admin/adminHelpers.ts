@@ -6,9 +6,9 @@ export const STAGE_LABELS: Record<string, string> = {
   iaa: 'IAA',
   signed_iaa: 'Signed IAA',
   bill_com: 'Bill.com',
-  crm: 'CRM',
   in_contracting: 'In Contracting',
   rts: 'RTS',
+  crm: 'CRM Onboarding',
   hip_broker_ready: 'HIP Broker READY',
   hip_career_ready: 'HIP Career READY',
   actively_selling: 'Actively Selling',
@@ -21,9 +21,9 @@ export const STAGE_COLORS: Record<string, string> = {
   iaa: 'bg-violet-100 text-violet-800',
   signed_iaa: 'bg-purple-100 text-purple-800',
   bill_com: 'bg-fuchsia-100 text-fuchsia-800',
-  crm: 'bg-cyan-100 text-cyan-800',
   in_contracting: 'bg-teal-100 text-teal-800',
   rts: 'bg-emerald-100 text-emerald-800',
+  crm: 'bg-cyan-100 text-cyan-800',
   hip_broker_ready: 'bg-green-100 text-green-800',
   hip_career_ready: 'bg-lime-100 text-lime-800',
   actively_selling: 'bg-amber-100 text-amber-800',
@@ -36,9 +36,9 @@ export const STAGE_DOT_COLORS: Record<string, string> = {
   iaa: 'bg-violet-500',
   signed_iaa: 'bg-purple-500',
   bill_com: 'bg-fuchsia-500',
-  crm: 'bg-cyan-500',
   in_contracting: 'bg-teal-500',
   rts: 'bg-emerald-500',
+  crm: 'bg-cyan-500',
   hip_broker_ready: 'bg-green-500',
   hip_career_ready: 'bg-lime-500',
   actively_selling: 'bg-amber-500',
@@ -47,7 +47,7 @@ export const STAGE_DOT_COLORS: Record<string, string> = {
 
 export const ALL_STAGES: AgentPipelineStage[] = [
   'hip_broker', 'hip_career', 'iaa', 'signed_iaa', 'bill_com',
-  'crm', 'in_contracting', 'rts', 'hip_broker_ready',
+  'in_contracting', 'rts', 'crm', 'hip_broker_ready',
   'hip_career_ready', 'actively_selling', 'terminated',
 ];
 

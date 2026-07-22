@@ -95,7 +95,7 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, onStag
     // Show stages that have agents or are key milestones
     const keyStages = new Set<AgentPipelineStage>([
       'hip_broker', 'hip_career', 'iaa', 'signed_iaa', 'bill_com',
-      'crm', 'in_contracting', 'rts', 'actively_selling',
+      'in_contracting', 'rts', 'crm', 'actively_selling',
     ]);
     return Array.from(map.entries()).filter(([s, agents]) => agents.length > 0 || keyStages.has(s));
   }, [filtered, stageSteps]);
