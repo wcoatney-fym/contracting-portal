@@ -25,13 +25,15 @@ import { ContractingPortalView } from './pages/ContractingPortalView';
 import { AgencyPortal } from './pages/AgencyPortal';
 import { AgentHub } from './pages/hub/AgentHub';
 import { BiancaHub } from './pages/hub/BiancaHub';
+import { HubLogin } from './pages/hub/HubLogin';
+import { RosterImport } from './pages/RosterImport';
 import { supabase } from './lib/supabase';
 import { AlertCircle } from 'lucide-react';
 
 const KNOWN_PATHS = new Set([
   '', 'dashboard', 'agent-intake', 'new-hires', 'populate-form', 'populate',
   'agent-tracking', 'agent-database', 'agent-pipeline', 'hierarchy',
-  'fym-agent-resources',
+  'fym-agent-resources', 'roster-import',
   // /agency/* is handled by an explicit route — don't treat 'agency' as a portal slug
   'agency',
 ]);
@@ -141,6 +143,7 @@ const ProtectedApp: React.FC = () => {
         <Route path="agent-tracking" element={<AgentTracking />} />
         <Route path="agent-database" element={<AgentDatabase />} />
         <Route path="agent-pipeline" element={<AgentPipeline />} />
+        <Route path="roster-import" element={<RosterImport />} />
         <Route path="hierarchy" element={<Hierarchy />} />
         {/* CRM Team tab moved to FYM Command. Routes preserved as redirect stubs until migration is complete. */}
       </Route>
@@ -164,7 +167,8 @@ function App() {
           <Route path="/direct-pay-hip" element={<HIP />} />
           <Route path="/telesales-hip" element={<HIP />} />
           <Route path="/thank-you" element={<ThankYou />} />
-          <Route path="/hub" element={<BiancaHub />} />
+          <Route path="/hub" element={<HubLogin />} />
+          <Route path="/hub/admin" element={<BiancaHub />} />
           <Route path="/hub/:token" element={<AgentHub />} />
           <Route path="/fym-agent-resources" element={<FymAgentResources />} />
           <Route path="/agency-intake" element={<AgencyIntake />} />

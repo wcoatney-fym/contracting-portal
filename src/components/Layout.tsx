@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, Users, Database, LogOut, Building2, Menu, ChevronLeft, GitBranch, Workflow } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Users, Database, LogOut, Building2, Menu, ChevronLeft, GitBranch, Workflow, Upload } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/agent-database', icon: Database, label: 'Agent Database' },
   { to: '/agent-pipeline', icon: Workflow, label: 'Agent Pipeline' },
   { to: '/hierarchy', icon: GitBranch, label: 'Hierarchy' },
+  { to: '/roster-import', icon: Upload, label: 'Roster Import' },
   // CRM Team tab migrated to FYM Command — removed from portal nav.
 ];
 
@@ -20,6 +21,7 @@ const breadcrumbMap: Record<string, string> = {
   '/agent-database': 'Agent Database',
   '/agent-pipeline': 'Agent Pipeline',
   '/hierarchy': 'Hierarchy',
+  '/roster-import': 'Roster Import',
   // '/crm-team': removed — now lives in FYM Command.
 };
 
