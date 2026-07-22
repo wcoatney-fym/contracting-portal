@@ -43,6 +43,26 @@ export type LobAssignment = {
   writing_number: string;
 };
 
+/** Enriched detail for pipeline card expansion — built in BiancaHub, keyed by lowercase email */
+export type PipelineAgentDetail = {
+  agent_id: string;
+  email: string | null;
+  phone: string | null;
+  npn: string | null;
+  form_type: string | null;
+  crm_onboarded: boolean;
+  intake: IntakeRecord | null;
+  lob_assignments: LobAssignment[];
+  /** Training: videos watched, quizzes passed, total content, completion % */
+  training: {
+    videosWatched: number;
+    quizzesPassed: number;
+    totalContent: number;
+    completionPct: number;
+    lastActivity: string | null;
+  };
+};
+
 export type PipelineAgent = {
   id: string;
   agent_name: string;
