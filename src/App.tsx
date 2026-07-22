@@ -23,6 +23,7 @@ import { AgencyIntake } from './pages/AgencyIntake';
 import { ContractingCard } from './pages/ContractingCard';
 import { ContractingPortalView } from './pages/ContractingPortalView';
 import { AgencyPortal } from './pages/AgencyPortal';
+import { BusinessIntakeForm } from './pages/portal/BusinessIntakeForm';
 import { AgentHub } from './pages/hub/AgentHub';
 import { BiancaHub } from './pages/hub/BiancaHub';
 import { HubLogin } from './pages/hub/HubLogin';
@@ -37,6 +38,13 @@ const KNOWN_PATHS = new Set([
   // /agency/* is handled by an explicit route — don't treat 'agency' as a portal slug
   'agency',
 ]);
+
+/** Wrapper that extracts :slug from /:slug/intake-form route */
+const BusinessIntakeFormRoute: React.FC = () => {
+  const location = useLocation();
+  const slug = location.pathname.replace(/^\//, '').split('/')[0] || '';
+  return <BusinessIntakeForm slug={slug} />;
+};
 
 const ProtectedApp: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -91,6 +99,13 @@ const ProtectedApp: React.FC = () => {
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-navy-600" />
       </div>
     );
+  }
+
+  // Check for /:slug/intake-form pattern
+  const isIntakeForm = pathSegments.length === 2 && pathSegments[1] === 'intake-form' && !isKnownPath;
+
+  if (isIntakeForm) {
+    return <BusinessIntakeFormRoute />;
   }
 
   if (portalSlug) {

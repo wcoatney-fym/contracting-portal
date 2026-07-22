@@ -11,14 +11,16 @@ import { PortalOnboardingView } from './portal/PortalOnboardingView';
 import { PortalBookTab } from './portal/PortalBookTab';
 import { PortalCancellationsTab } from './portal/PortalCancellationsTab';
 import { PortalCrossSellTab } from './portal/PortalCrossSellTab';
+import { PortalIntakeTab } from './portal/PortalIntakeTab';
 import { AgencyFilter } from './portal/AgencyFilter';
 
-type PortalTab = 'dashboard' | 'agents' | 'book' | 'cancellations' | 'cross-sell' | 'tickets' | 'csr';
+type PortalTab = 'dashboard' | 'agents' | 'book' | 'intake' | 'cancellations' | 'cross-sell' | 'tickets' | 'csr';
 
 const TAB_ITEMS: { key: PortalTab; label: string; icon: React.FC<{ className?: string }> }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: BarChart3 },
   { key: 'agents', label: 'Agent Management', icon: Users },
   { key: 'book', label: 'Book of Business', icon: BookOpen },
+  { key: 'intake', label: 'New Business', icon: FileText },
   { key: 'cancellations', label: 'Cancellation Upload', icon: Upload },
   { key: 'cross-sell', label: 'Cross-Sell', icon: Package },
   { key: 'tickets', label: 'Support', icon: MessageSquareText },
@@ -335,6 +337,13 @@ export const AgencyPortal: React.FC = () => {
                     <PortalCancellationsTab
                       agency={agency}
                       agencyIds={selectedAgencyIds}
+                    />
+                  )}
+                  {activeTab === 'intake' && (
+                    <PortalIntakeTab
+                      agency={agency}
+                      agencyIds={selectedAgencyIds}
+                      agencyNames={selectedAgencyNames}
                     />
                   )}
                   {activeTab === 'cross-sell' && (
