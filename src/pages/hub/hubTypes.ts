@@ -27,7 +27,10 @@ export type TrainingContent = {
   title: string;
   description: string | null;
   content_type: string;
+  content_format: string;
   content_url: string | null;
+  carrier: string;
+  category: string;
   has_quiz: boolean;
   quiz_questions: { question: string; options: string[]; correct_index: number }[];
 };
