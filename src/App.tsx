@@ -101,8 +101,8 @@ const ProtectedApp: React.FC = () => {
     );
   }
 
-  // Check for /:slug/intake-form pattern
-  const isIntakeForm = pathSegments.length === 2 && pathSegments[1] === 'intake-form' && !isKnownPath;
+  // Check for /:slug/intake-form pattern (two segments, first is not a known app path)
+  const isIntakeForm = pathSegments.length === 2 && pathSegments[1] === 'intake-form' && !KNOWN_PATHS.has(pathSegments[0]);
 
   if (isIntakeForm) {
     return <BusinessIntakeFormRoute />;
