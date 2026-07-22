@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import type { AgentPipelineStage } from '../../lib/supabase';
+import type { AgentPipelineStage, AgentPipelineStageStep } from '../../lib/supabase';
 import {
   Lock, LayoutDashboard, Users, BookOpen, Kanban, Video,
   RefreshCw, Loader2,
@@ -43,6 +43,7 @@ export const BiancaHub: React.FC = () => {
   const [attendance, setAttendance] = useState<LiveAttendance[]>([]);
   const [intakeRecords, setIntakeRecords] = useState<IntakeRecord[]>([]);
   const [lobAssignments, setLobAssignments] = useState<LobAssignment[]>([]);
+  const [stageSteps, setStageSteps] = useState<AgentPipelineStageStep[]>([]);
 
   // ── Data loading ──────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -58,9 +59,10 @@ export const BiancaHub: React.FC = () => {
       { data: attendanceRows },
       { data: intakeRows },
       { data: lobRows },
+      { data: stageStepRows },
     ] = await Promise.all([
       supabase.from('agents').select('id, first_name, last_name, email, phone, agency, npn, source, status, form_type, crm_onboarded, created_at').order('created_at', { ascending: false }),
-      supabase.from('agent_pipeline').select('id, agent_id, agent_name, first_name, last_name, email, phone, agency, stage, tags, last_updated_by, last_updated_by_display, updated_by_source, stage_entered_at, updated_at').order('updated_at', { ascending: false }),
+      supabase.from('agent_pipeline').select('id, agent_name, first_name, last_name, email, phone, agency, agency_id, stage, tags, last_updated_by, last_updated_by_display, updated_by_source, stage_entered_at, updated_at, completed_steps').order('updated_at', { ascending: false }),
       supabase.from('agent_training_events').select('id, agent_id, event_type, content_id, content_title, quiz_score, created_at').order('created_at', { ascending: false }).limit(500),
       supabase.from('agent_training_content').select('id, title, description, content_type, content_format, carrier, category, has_quiz, display_order').eq('is_active', true).order('display_order'),
       supabase.from('agent_live_sessions').select('id, title, session_datetime, join_url, is_active').order('session_datetime', { ascending: false }),
@@ -68,6 +70,7 @@ export const BiancaHub: React.FC = () => {
       supabase.from('agent_live_attendance').select('id, agent_id, session_id, clicked_join_at'),
       supabase.from('agent_intake').select('agent_id, date_of_birth, address, city, state, postal_code, ssn, resident_license_number, npn, resident_state, ctm_acknowledgment, agent_type, gender, release_needed, state_licenses, submitted_at'),
       supabase.from('agent_lob_assignments').select('agent_id, line_of_business, carrier, writing_number'),
+      supabase.from('agent_pipeline_stage_steps').select('id, internal_stage, label, display_order, active, created_at').eq('active', true).order('display_order'),
     ]);
 
     if (agentRows) setAgents(agentRows);
@@ -79,6 +82,7 @@ export const BiancaHub: React.FC = () => {
     if (attendanceRows) setAttendance(attendanceRows);
     if (intakeRows) setIntakeRecords(intakeRows);
     if (lobRows) setLobAssignments(lobRows);
+    if (stageStepRows) setStageSteps(stageStepRows);
 
     setLoading(false);
   }, []);
@@ -137,12 +141,18 @@ export const BiancaHub: React.FC = () => {
       const lastLogin = agentLogins[0]?.logged_in_at ?? null;
       const loginCount = agentLogins.length;
 
-      // Pipeline stage + tags
-      const pipelineRecord = pipeline.find(p => p.agent_id === a.id);
+      // Pipeline stage + tags — match by email (most reliable) or name
+      const aEmail = (a.email ?? '').toLowerCase();
+      const aName = agentDisplayName(a.first_name, a.last_name).toLowerCase();
+      const pipelineRecord = pipeline.find(p => {
+        if (aEmail && p.email && p.email.toLowerCase() === aEmail) return true;
+        const pName = agentDisplayName(p.first_name, p.last_name, p.agent_name).toLowerCase();
+        return pName === aName && aName !== 'unknown';
+      });
       const stage = (pipelineRecord?.stage ?? null) as AgentPipelineStage | null;
       const stageEnteredAt = pipelineRecord?.stage_entered_at ?? null;
       const daysInStage = stageEnteredAt ? daysBetween(stageEnteredAt) : null;
-      const tags = (pipelineRecord as any)?.tags ?? [];
+      const tags = pipelineRecord?.tags ?? [];
 
       // Training completion — unique content IDs with quiz_pass or video_view
       const completedIds = new Set(
@@ -383,6 +393,7 @@ export const BiancaHub: React.FC = () => {
             {activeTab === 'pipeline' && (
               <AdminPipelineTab
                 pipeline={pipeline}
+                stageSteps={stageSteps}
                 onStageChange={handleStageChange}
               />
             )}
