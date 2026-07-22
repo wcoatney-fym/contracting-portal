@@ -411,27 +411,82 @@ export type AgencyIntakeSubmission = {
 export type BusinessIntakeSubmission = {
   id: string;
   agency_id: string;
-  agency_name: string;
-  agent_first_name: string;
-  agent_last_name: string;
-  agent_npn: string;
+  agency_name: string | null;
+
+  // Agent info (from roster verification)
+  agent_first_name: string | null;
+  agent_last_name: string | null;
+  agent_npn: string | null;
   roster_row_id: string | null;
-  client_first_name: string;
-  client_last_name: string;
+
+  // V1 client fields (kept for backward compat)
+  client_first_name: string | null;
+  client_last_name: string | null;
   client_phone: string | null;
   client_email: string | null;
   client_state: string | null;
-  carrier: string;
-  product_type: string;
+
+  // V2 client / Medicare fields
+  full_name: string | null;
+  medicare_id: string | null;
+  date_of_birth: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  zip_code: string | null;
+  hra: boolean;
+  email_address: string | null;
+
+  // V1 policy fields (kept for backward compat)
+  carrier: string | null;
+  product_type: string | null;
   policy_number: string | null;
   premium_amount: number | null;
   effective_date: string | null;
   billing_mode: string | null;
+
+  // V2 plan detail fields
+  carrier_name: string | null;
+  plan_name: string | null;
+  plan_policy_type: string | null;
+  plan_id: string | null;
+  plan_change_status: string | null;
+  advancement: string | null;
+  election_period: string | null;
+
+  // V2 sales context fields
+  upline: string | null;
+  call_type: string | null;
+  transfer_agent: string | null;
+  sales_agent: string | null;
+  original_aor: string | null;
+  submit_date: string | null;
+  sunfire_personal_code: string | null;
+  doctors: string | null;
+  medications: string | null;
+  notes_selling_points: string | null;
+
+  // V1 notes field (kept for backward compat)
   notes: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+  // Edit tracking
+  is_edited: boolean;
+  edit_count: number;
+  last_edited_at: string | null;
+
+  // Management-only fields
+  needs_fix: boolean;
+  agent_notified: boolean;
+  corrected: boolean;
+  mgmt_details: string | null;
+  mgmt_notes: string | null;
+
+  // Status & review
+  status: 'submitted' | 'under_review' | 'needs_fix' | 'corrected' | 'approved' | 'pending' | 'rejected' | 'cancelled';
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+
   created_at: string;
   updated_at: string;
 };
