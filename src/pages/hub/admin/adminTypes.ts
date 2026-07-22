@@ -60,6 +60,8 @@ export type PipelineAgent = {
   updated_by_source: 'contracting_portal' | 'training_hub' | 'ghl_webhook' | 'system' | null;
   stage_entered_at: string;
   updated_at: string;
+  wn_pending_review: boolean;
+  wn_pending_count: number;
 };
 
 export type TrainingEvent = {

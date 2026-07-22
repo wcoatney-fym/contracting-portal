@@ -113,13 +113,14 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({
         </div>
       </div>
 
-      {/* ── Writing Number Upload — only after IAA + Bill.com complete (stageIdx ≥ 3) ── */}
-      {!agent.is_rts && stageIdx >= 4 && (
+      {/* ── Writing Number Upload — primary action at In Contracting, persistent utility after ── */}
+      {stageIdx >= 4 && (
         <WritingNumberUpload
           agentId={agent.agent_id}
           verifiedCarriers={verifiedCarriers}
           existingSubmissions={wnSubmissions}
           onSubmissionAdded={onWnSubmissionAdded}
+          isPrimaryAction={agent.stage === 'in_contracting'}
         />
       )}
 

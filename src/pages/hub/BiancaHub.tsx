@@ -62,7 +62,7 @@ export const BiancaHub: React.FC = () => {
       { data: stageStepRows },
     ] = await Promise.all([
       supabase.from('agents').select('id, first_name, last_name, email, phone, agency, npn, source, status, form_type, crm_onboarded, created_at').order('created_at', { ascending: false }),
-      supabase.from('agent_pipeline').select('id, agent_name, first_name, last_name, email, phone, agency, agency_id, stage, tags, last_updated_by, last_updated_by_display, updated_by_source, stage_entered_at, updated_at, completed_steps').order('updated_at', { ascending: false }),
+      supabase.from('agent_pipeline').select('id, agent_name, first_name, last_name, email, phone, agency, agency_id, stage, tags, last_updated_by, last_updated_by_display, updated_by_source, stage_entered_at, updated_at, completed_steps, wn_pending_review, wn_pending_count').order('updated_at', { ascending: false }),
       supabase.from('agent_training_events').select('id, agent_id, event_type, content_id, content_title, quiz_score, created_at').order('created_at', { ascending: false }).limit(500),
       supabase.from('agent_training_content').select('id, title, description, content_type, content_format, carrier, category, has_quiz, display_order').eq('is_active', true).order('display_order'),
       supabase.from('agent_live_sessions').select('id, title, session_datetime, join_url, is_active').order('session_datetime', { ascending: false }),
@@ -116,6 +116,20 @@ export const BiancaHub: React.FC = () => {
     }
     return map;
   }, [lobAssignments]);
+
+  // WN verified count by email — bridges agents.id → lobAssignments.agent_id → agents.email
+  const wnVerifiedByEmail = useMemo(() => {
+    const agentEmailById = new Map<string, string>();
+    for (const a of agents) {
+      if (a.email) agentEmailById.set(a.id, a.email.toLowerCase());
+    }
+    const map = new Map<string, number>();
+    for (const r of lobAssignments) {
+      const email = agentEmailById.get(r.agent_id);
+      if (email) map.set(email, (map.get(email) ?? 0) + 1);
+    }
+    return map;
+  }, [agents, lobAssignments]);
 
   // Agent summaries for Dashboard + Agents tabs
   const agentSummaries: AgentSummary[] = useMemo(() => {
@@ -394,6 +408,7 @@ export const BiancaHub: React.FC = () => {
               <AdminPipelineTab
                 pipeline={pipeline}
                 stageSteps={stageSteps}
+                wnVerifiedByEmail={wnVerifiedByEmail}
                 onStageChange={handleStageChange}
               />
             )}
