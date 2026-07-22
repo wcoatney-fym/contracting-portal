@@ -81,6 +81,8 @@ export const HubLogin: React.FC = () => {
         .maybeSingle();
 
       if (existingToken?.token) {
+        // Log the login
+        supabase.from('agent_hub_logins').insert({ agent_id: agentId, login_method: 'npn' }).then(() => {});
         navigate(`/hub/${existingToken.token}`);
         return;
       }
@@ -102,6 +104,8 @@ export const HubLogin: React.FC = () => {
         .maybeSingle();
 
       if (newToken?.token) {
+        // Log the login (first-time token creation)
+        supabase.from('agent_hub_logins').insert({ agent_id: agentId, login_method: 'npn' }).then(() => {});
         navigate(`/hub/${newToken.token}`);
       } else {
         setError('Something went wrong. Please try again or contact Contracting@teamfym.com.');
