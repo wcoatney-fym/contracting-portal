@@ -26,6 +26,18 @@ type StageEditState = {
   saving: boolean;
 };
 
+// Agent-self-completed step keys → human labels
+const AGENT_STEP_LABELS: Record<string, string> = {
+  iaa_signed_by_agent: 'IAA signed',
+  bill_com_done_by_agent: 'Bill.com set up',
+};
+
+// Check if agent has pending self-completed steps awaiting admin approval
+function agentPendingApprovals(agent: PipelineAgent): string[] {
+  const completed = agent.completed_steps || {};
+  return Object.keys(completed).filter(k => k in AGENT_STEP_LABELS);
+}
+
 // Step progress for a pipeline agent
 function computeStepProgress(agent: PipelineAgent, allSteps: AgentPipelineStageStep[]) {
   const steps = allSteps
@@ -228,6 +240,17 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, onStag
                           ) : null
                         )}
 
+                        {/* Agent pending approvals */}
+                        {agentPendingApprovals(a).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {agentPendingApprovals(a).map(k => (
+                              <span key={k} className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                <Clock className="w-2.5 h-2.5" /> {AGENT_STEP_LABELS[k]} — approve?
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
                         {/* Tags */}
                         {a.tags && a.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
@@ -294,6 +317,11 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, onStag
                     </span>
                   )}
                   <span className={`text-xs ${stale ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>{days}d</span>
+                  {agentPendingApprovals(a).length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                      <Clock className="w-2.5 h-2.5" /> Pending
+                    </span>
+                  )}
                   {a.updated_by_source && (
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${sourceColor(a.updated_by_source)}`}>
                       {sourceLabel(a.updated_by_source)}

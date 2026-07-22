@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  CheckCircle2, Lock, CalendarCheck, Zap, AlertCircle, Mail,
+  CheckCircle2, Lock, CalendarCheck, Zap, AlertCircle, Mail, Clock, Loader2,
 } from 'lucide-react';
 import type { HubAgent, WnSubmission } from './hubTypes';
 import { stageIndex, STAGE_CHECKLIST, TYLER_BOOKING_URL } from './hubHelpers';
@@ -12,14 +12,25 @@ interface ProgressTabProps {
   verifiedCarriers: Set<'UNL' | 'GTL'>;
   onWnSubmissionAdded: (sub: WnSubmission) => void;
   onTylerClick: () => void;
+  onStepComplete: (stepKey: string) => Promise<void>;
 }
 
 export const ProgressTab: React.FC<ProgressTabProps> = ({
-  agent, wnSubmissions, verifiedCarriers, onWnSubmissionAdded, onTylerClick,
+  agent, wnSubmissions, verifiedCarriers, onWnSubmissionAdded, onTylerClick, onStepComplete,
 }) => {
   const stageIdx = stageIndex(agent.stage);
   const completedStages = stageIdx + 1;
   const totalStages = STAGE_CHECKLIST.length;
+  const [markingStep, setMarkingStep] = useState<string | null>(null);
+
+  const handleMarkComplete = async (stepKey: string) => {
+    setMarkingStep(stepKey);
+    try {
+      await onStepComplete(stepKey);
+    } finally {
+      setMarkingStep(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -37,6 +48,8 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({
             const current = i === stageIdx;
             const locked  = i > stageIdx;
             const isLast  = i === STAGE_CHECKLIST.length - 1;
+            const agentMarked = s.agentCompletable ? !!agent.completed_steps[s.agentCompletable] : false;
+            const isMarking = s.agentCompletable === markingStep;
 
             return (
               <div key={s.key} className="flex gap-4">
@@ -44,14 +57,17 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({
                 <div className="flex flex-col items-center">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 z-10
                     ${done    ? 'bg-emerald-500 border-emerald-500' : ''}
-                    ${current ? 'bg-white border-navy-600' : ''}
+                    ${current && agentMarked ? 'bg-amber-100 border-amber-400' : ''}
+                    ${current && !agentMarked ? 'bg-white border-navy-600' : ''}
                     ${locked  ? 'bg-white border-gray-200' : ''}
                   `}>
                     {done
                       ? <CheckCircle2 className="w-4 h-4 text-white" />
-                      : current
-                        ? <div className="w-2.5 h-2.5 rounded-full bg-navy-600" />
-                        : <Lock className="w-3.5 h-3.5 text-gray-300" />
+                      : current && agentMarked
+                        ? <Clock className="w-4 h-4 text-amber-500" />
+                        : current
+                          ? <div className="w-2.5 h-2.5 rounded-full bg-navy-600" />
+                          : <Lock className="w-3.5 h-3.5 text-gray-300" />
                     }
                   </div>
                   {!isLast && (
@@ -69,6 +85,26 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({
                   </p>
                   {current && (
                     <p className="text-xs text-gray-500 mt-1">{s.subtitle}</p>
+                  )}
+                  {/* Agent self-completion button */}
+                  {current && s.agentCompletable && !agentMarked && (
+                    <button
+                      onClick={() => handleMarkComplete(s.agentCompletable!)}
+                      disabled={isMarking}
+                      className="mt-2.5 inline-flex items-center gap-1.5 bg-navy-700 hover:bg-navy-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {isMarking ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting…</>
+                      ) : (
+                        <><CheckCircle2 className="w-3.5 h-3.5" /> {s.agentActionLabel}</>
+                      )}
+                    </button>
+                  )}
+                  {/* Pending approval state */}
+                  {current && agentMarked && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-lg">
+                      <Clock className="w-3.5 h-3.5" /> Pending Approval
+                    </div>
                   )}
                 </div>
               </div>

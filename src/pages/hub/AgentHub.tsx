@@ -54,7 +54,7 @@ export const AgentHub: React.FC = () => {
       { data: eventRows },
     ] = await Promise.all([
       supabase.from('agents').select('first_name, last_name, agency').eq('id', tokenRow.agent_id).maybeSingle(),
-      supabase.from('agent_pipeline').select('stage').eq('agent_id', tokenRow.agent_id).maybeSingle(),
+      supabase.from('agent_pipeline').select('id, stage, completed_steps').eq('agent_id', tokenRow.agent_id).maybeSingle(),
       supabase.from('agent_training_content').select('*').eq('is_active', true).order('display_order'),
       supabase.from('agent_live_sessions').select('*').eq('is_active', true)
         .gte('session_datetime', new Date().toISOString()).order('session_datetime').limit(6),
@@ -86,7 +86,9 @@ export const AgentHub: React.FC = () => {
 
     setAgent({ agent_id: tokenRow.agent_id, agent_slug: tokenRow.agent_slug, token: tokenRow.token,
       first_name: agentRow?.first_name ?? null, last_name: agentRow?.last_name ?? null,
-      agency: agentRow?.agency ?? null, stage, is_rts: isRts });
+      agency: agentRow?.agency ?? null, stage, is_rts: isRts,
+      completed_steps: (pipelineRow?.completed_steps as Record<string, string>) ?? {},
+      pipeline_id: pipelineRow?.id ?? null });
     setTraining(contentRows ?? []);
     setLiveSessions(sessionRows ?? []);
     setCompletedContent(completed);
@@ -103,6 +105,24 @@ export const AgentHub: React.FC = () => {
   const handleTylerClick = () => {
     logEvent('tyler_schedule_click');
     if (TYLER_BOOKING_URL !== '#') window.open(TYLER_BOOKING_URL, '_blank');
+  };
+
+  const handleStepComplete = async (stepKey: string) => {
+    if (!agent?.pipeline_id) return;
+    const now = new Date().toISOString();
+    const updatedSteps = { ...agent.completed_steps, [stepKey]: now };
+
+    // Write to agent_pipeline.completed_steps
+    await supabase
+      .from('agent_pipeline')
+      .update({ completed_steps: updatedSteps, updated_at: now })
+      .eq('id', agent.pipeline_id);
+
+    // Log a training event so admins see it in the activity feed
+    await logEvent('step_self_complete', { step_key: stepKey });
+
+    // Update local state
+    setAgent(prev => prev ? { ...prev, completed_steps: updatedSteps } : prev);
   };
 
   const handleContentClick = (c: TrainingContent) => {
@@ -216,6 +236,7 @@ export const AgentHub: React.FC = () => {
             verifiedCarriers={verifiedCarriers}
             onWnSubmissionAdded={(sub) => setWnSubmissions(prev => [sub, ...prev])}
             onTylerClick={handleTylerClick}
+            onStepComplete={handleStepComplete}
           />
         )}
 

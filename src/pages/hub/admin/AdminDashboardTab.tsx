@@ -252,10 +252,17 @@ function EventIcon({ type }: { type: string }) {
       return <div className={`${base} bg-violet-50`}><Video className="w-3.5 h-3.5 text-violet-500" /></div>;
     case 'tyler_schedule_click':
       return <div className={`${base} bg-rose-50`}><Clock className="w-3.5 h-3.5 text-rose-500" /></div>;
+    case 'step_self_complete':
+      return <div className={`${base} bg-amber-50`}><CheckCircle2 className="w-3.5 h-3.5 text-amber-500" /></div>;
     default:
       return <div className={`${base} bg-gray-50`}><LogIn className="w-3.5 h-3.5 text-gray-400" /></div>;
   }
 }
+
+const STEP_LABELS: Record<string, string> = {
+  iaa_signed_by_agent: 'IAA',
+  bill_com_done_by_agent: 'Bill.com',
+};
 
 function eventLabel(e: TrainingEvent): string {
   switch (e.event_type) {
@@ -264,6 +271,7 @@ function eventLabel(e: TrainingEvent): string {
     case 'quiz_pass': return `passed quiz: ${e.content_title ?? 'unknown'}`;
     case 'live_training_click': return `joined live session: ${e.content_title ?? 'unknown'}`;
     case 'tyler_schedule_click': return 'clicked Schedule w/ Tyler';
+    case 'step_self_complete': return `marked ${STEP_LABELS[(e as Record<string, unknown>).step_key as string] ?? 'a step'} complete — pending approval`;
     default: return e.event_type;
   }
 }
