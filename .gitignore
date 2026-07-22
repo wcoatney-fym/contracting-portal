@@ -25,3 +25,4 @@ dist-ssr
 # Bolt export artifact — contains secrets, never deploy
 project-export.json
 .env
+supabase/.temp/
