@@ -77,8 +77,8 @@ export const FloatingChatbot: React.FC = () => {
       setMessages([{
         role: 'assistant',
         text: isActive
-          ? 'Hi! I\'m your FYM training assistant. Ask me anything about contracting, carriers, or training — I can help with text or voice.'
-          : 'Our AI assistant is coming soon! In the meantime, send us an email and we\'ll get back to you.',
+          ? 'Hi! I\'m Bianca — your FYM training assistant. Ask me anything about contracting, carriers, or training — I can help with text or voice.'
+          : 'Hey! I\'m Bianca — your FYM AI assistant. I\'m getting set up right now, but in the meantime send us an email and we\'ll get right back to you.',
         timestamp: new Date(),
       }]);
     }
@@ -101,7 +101,7 @@ export const FloatingChatbot: React.FC = () => {
                 <Bot className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-semibold">FYM Assistant</p>
+                <p className="text-sm font-semibold">Bianca A.I.</p>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                   <p className="text-[10px] text-navy-300">
@@ -168,7 +168,7 @@ export const FloatingChatbot: React.FC = () => {
                           setTimeout(() => {
                             setMessages(prev => [...prev, {
                               role: 'assistant',
-                              text: 'Thanks for your question! Our AI assistant is being set up. In the meantime, email Contracting@teamfym.com and we\'ll help you out.',
+                              text: 'Thanks for your question! I\'m still getting set up, but email Contracting@teamfym.com and the team will help you out.',
                               timestamp: new Date(),
                             }]);
                           }, 800);
@@ -191,7 +191,7 @@ export const FloatingChatbot: React.FC = () => {
                         setTimeout(() => {
                           setMessages(prev => [...prev, {
                             role: 'assistant',
-                            text: 'Thanks for your question! Our AI assistant is being set up. In the meantime, email Contracting@teamfym.com and we\'ll help you out.',
+                            text: 'Thanks for your question! I\'m still getting set up, but email Contracting@teamfym.com and the team will help you out.',
                             timestamp: new Date(),
                           }]);
                         }, 800);
@@ -249,15 +249,21 @@ export const FloatingChatbot: React.FC = () => {
       {/* FAB */}
       <button
         onClick={() => setOpen(o => !o)}
-        className={`fixed bottom-5 right-4 z-50 w-13 h-13 rounded-full shadow-lg transition-all flex items-center justify-center hover:scale-105 active:scale-95 ${
+        className={`fixed bottom-5 right-4 z-50 rounded-full shadow-lg transition-all flex items-center hover:scale-105 active:scale-95 ${
           open
-            ? 'bg-gray-600 hover:bg-gray-700'
-            : 'bg-navy-700 hover:bg-navy-800'
+            ? 'bg-gray-600 hover:bg-gray-700 w-[52px] h-[52px] justify-center'
+            : 'bg-navy-700 hover:bg-navy-800 pl-3.5 pr-4 h-[52px] gap-2'
         } text-white`}
-        style={{ width: 52, height: 52 }}
-        aria-label={open ? 'Close chat' : 'Chat with us'}
+        aria-label={open ? 'Close chat' : 'Ask Bianca A.I.'}
       >
-        {open ? <X className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
+        {open ? (
+          <X className="w-5 h-5" />
+        ) : (
+          <>
+            <MessageCircle className="w-5 h-5 shrink-0" />
+            <span className="text-sm font-semibold whitespace-nowrap">Ask Bianca A.I.</span>
+          </>
+        )}
       </button>
     </>
   );
