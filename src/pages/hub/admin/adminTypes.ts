@@ -12,7 +12,35 @@ export type AdminAgent = {
   npn: string | null;
   source: string | null;
   status: string | null;
+  form_type: string | null;
+  crm_onboarded: boolean;
   created_at: string;
+};
+
+export type IntakeRecord = {
+  agent_id: string;
+  date_of_birth: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  ssn: string | null;
+  resident_license_number: string | null;
+  npn: string | null;
+  resident_state: string | null;
+  ctm_acknowledgment: string | null;
+  agent_type: string | null;
+  gender: string | null;
+  release_needed: string | null;
+  state_licenses: string[];
+  submitted_at: string | null;
+};
+
+export type LobAssignment = {
+  agent_id: string;
+  line_of_business: string;
+  carrier: string;
+  writing_number: string;
 };
 
 export type PipelineAgent = {
@@ -79,9 +107,14 @@ export type LiveAttendance = {
 export type AgentSummary = {
   agent_id: string;
   name: string;
+  email: string | null;
+  phone: string | null;
   agency: string | null;
   stage: AgentPipelineStage | null;
   npn: string | null;
+  form_type: string | null;
+  crm_onboarded: boolean;
+  tags: string[];
   video_views: number;
   quiz_attempts: number;
   quiz_passes: number;
@@ -93,6 +126,10 @@ export type AgentSummary = {
   days_in_stage: number | null;
   stage_entered_at: string | null;
   training_pct: number; // 0-100
+  // Intake data
+  intake: IntakeRecord | null;
+  // LOB / writing numbers
+  lob_assignments: LobAssignment[];
 };
 
 export type ContentStat = {
