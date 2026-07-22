@@ -23,6 +23,8 @@ interface WritingNumberUploadProps {
   /** Pending/rejected submissions already in the DB — to show status without reload */
   existingSubmissions: Submission[];
   onSubmissionAdded: (sub: Submission) => void;
+  /** When true, this is the primary action step (In Contracting). When false, it's a persistent utility for later stages. */
+  isPrimaryAction?: boolean;
 }
 
 type Mode = 'typed' | 'image';
@@ -32,6 +34,7 @@ export const WritingNumberUpload: React.FC<WritingNumberUploadProps> = ({
   verifiedCarriers,
   existingSubmissions,
   onSubmissionAdded,
+  isPrimaryAction = false,
 }) => {
   const [selectedCarrier, setSelectedCarrier] = useState<Carrier | ''>('');
   const [mode, setMode] = useState<Mode>('typed');
@@ -181,13 +184,20 @@ export const WritingNumberUpload: React.FC<WritingNumberUploadProps> = ({
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${allVerified ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-            <PenLine className={`w-4 h-4 ${allVerified ? 'text-emerald-600' : 'text-amber-600'}`} />
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${allVerified ? 'bg-emerald-100' : isPrimaryAction ? 'bg-navy-100' : 'bg-amber-100'}`}>
+            <PenLine className={`w-4 h-4 ${allVerified ? 'text-emerald-600' : isPrimaryAction ? 'text-navy-600' : 'text-amber-600'}`} />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-gray-900">Writing Numbers</h2>
+            <h2 className="text-sm font-bold text-gray-900">
+              {isPrimaryAction ? 'Submit Writing Numbers' : 'Writing Numbers'}
+            </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              {allVerified ? 'All verified ✓' : 'Required before Test with Tyler'}
+              {allVerified
+                ? 'All verified ✓'
+                : isPrimaryAction
+                  ? 'Add at least one to proceed — you can always add more later'
+                  : 'Add or update your writing numbers'
+              }
             </p>
           </div>
         </div>

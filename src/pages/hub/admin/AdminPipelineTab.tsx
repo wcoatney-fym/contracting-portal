@@ -10,9 +10,12 @@ import {
   timeAgo, daysBetween, agentDisplayName, sourceLabel, sourceColor,
 } from './adminHelpers';
 
+
 interface Props {
   pipeline: PipelineAgent[];
   stageSteps: AgentPipelineStageStep[];
+  /** email → number of verified writing numbers */
+  wnVerifiedByEmail: Map<string, number>;
   onStageChange: (agentId: string, newStage: AgentPipelineStage, updatedBy: string) => Promise<boolean>;
 }
 
@@ -57,7 +60,12 @@ function isRecentlyUpdated(agent: PipelineAgent): boolean {
   return new Date(agent.updated_at).getTime() > twoHoursAgo;
 }
 
-export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, onStageChange }) => {
+// Stages where WN status is relevant (In Contracting and beyond)
+const WN_RELEVANT_STAGES = new Set<AgentPipelineStage>([
+  'in_contracting', 'rts', 'crm', 'hip_broker_ready', 'hip_career_ready', 'actively_selling',
+]);
+
+export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, wnVerifiedByEmail, onStageChange }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [search, setSearch] = useState('');
   const [editState, setEditState] = useState<StageEditState | null>(null);
@@ -251,6 +259,32 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, onStag
                           </div>
                         )}
 
+                        {/* WN status — shows at In Contracting and beyond */}
+                        {WN_RELEVANT_STAGES.has(stage) && (() => {
+                          const email = (a.email ?? '').toLowerCase();
+                          const verified = wnVerifiedByEmail.get(email) ?? 0;
+                          const pending = a.wn_pending_count ?? 0;
+                          if (verified > 0) {
+                            return (
+                              <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                <CheckCircle2 className="w-2.5 h-2.5" /> WN: {verified} verified
+                              </div>
+                            );
+                          }
+                          if (pending > 0) {
+                            return (
+                              <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                <Clock className="w-2.5 h-2.5" /> WN: {pending} pending review
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-100">
+                              <PenLine className="w-2.5 h-2.5" /> WN: Incomplete
+                            </div>
+                          );
+                        })()}
+
                         {/* Tags */}
                         {a.tags && a.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
@@ -322,6 +356,14 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, onStag
                       <Clock className="w-2.5 h-2.5" /> Pending
                     </span>
                   )}
+                  {WN_RELEVANT_STAGES.has(a.stage) && (() => {
+                    const email = (a.email ?? '').toLowerCase();
+                    const verified = wnVerifiedByEmail.get(email) ?? 0;
+                    const pending = a.wn_pending_count ?? 0;
+                    if (verified > 0) return <span className="text-[9px] font-semibold text-emerald-600">WN ✓</span>;
+                    if (pending > 0) return <span className="text-[9px] font-semibold text-amber-600">WN pending</span>;
+                    return <span className="text-[9px] font-semibold text-red-500">WN incomplete</span>;
+                  })()}
                   {a.updated_by_source && (
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${sourceColor(a.updated_by_source)}`}>
                       {sourceLabel(a.updated_by_source)}
