@@ -6,7 +6,7 @@ import type { PipelineAgent } from './adminTypes';
 import type { AgentPipelineStage } from '../../../lib/supabase';
 import {
   STAGE_LABELS, STAGE_COLORS, STAGE_DOT_COLORS, ALL_STAGES,
-  timeAgo, daysBetween, agentDisplayName,
+  timeAgo, daysBetween, agentDisplayName, sourceLabel, sourceColor,
 } from './adminHelpers';
 
 interface Props {
@@ -139,6 +139,11 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, onStageChange }) =
                         <div className="flex items-center gap-2 mt-2 text-[11px] text-gray-400">
                           <Clock className="w-3 h-3" />
                           <span className={stale ? 'text-amber-600 font-medium' : ''}>{days}d</span>
+                          {a.updated_by_source && (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${sourceColor(a.updated_by_source)}`}>
+                              {sourceLabel(a.updated_by_source)}
+                            </span>
+                          )}
                           <span className="ml-auto">by {a.last_updated_by_display || a.last_updated_by}</span>
                         </div>
                       </div>
@@ -172,6 +177,11 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, onStageChange }) =
                     {STAGE_LABELS[a.stage] ?? a.stage}
                   </span>
                   <span className={`text-xs ${stale ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>{days}d</span>
+                  {a.updated_by_source && (
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${sourceColor(a.updated_by_source)}`}>
+                      {sourceLabel(a.updated_by_source)}
+                    </span>
+                  )}
                   <button onClick={() => openEdit(a)} className="shrink-0 text-gray-400 hover:text-navy-600 p-1">
                     <PenLine className="w-3.5 h-3.5" />
                   </button>

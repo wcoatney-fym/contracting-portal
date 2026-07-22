@@ -104,3 +104,27 @@ export function agentDisplayName(first: string | null, last: string | null, fall
   if (last) return last;
   return fallback ?? 'Unknown';
 }
+
+export type UpdateSource = 'contracting_portal' | 'training_hub' | 'ghl_webhook' | 'system' | null;
+
+export const SOURCE_LABELS: Record<string, string> = {
+  contracting_portal: 'Contracting',
+  training_hub: 'Training',
+  ghl_webhook: 'GHL',
+  system: 'System',
+};
+
+export const SOURCE_COLORS: Record<string, string> = {
+  contracting_portal: 'bg-blue-50 text-blue-700 border-blue-200',
+  training_hub: 'bg-purple-50 text-purple-700 border-purple-200',
+  ghl_webhook: 'bg-orange-50 text-orange-700 border-orange-200',
+  system: 'bg-gray-50 text-gray-600 border-gray-200',
+};
+
+export function sourceLabel(source: UpdateSource): string {
+  return source ? SOURCE_LABELS[source] ?? source : '';
+}
+
+export function sourceColor(source: UpdateSource): string {
+  return source ? SOURCE_COLORS[source] ?? 'bg-gray-50 text-gray-600 border-gray-200' : '';
+}
