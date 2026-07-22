@@ -408,6 +408,34 @@ export type AgencyIntakeSubmission = {
   invited_by_agency_name: string | null;
 };
 
+export type BusinessIntakeSubmission = {
+  id: string;
+  agency_id: string;
+  agency_name: string;
+  agent_first_name: string;
+  agent_last_name: string;
+  agent_npn: string;
+  roster_row_id: string | null;
+  client_first_name: string;
+  client_last_name: string;
+  client_phone: string | null;
+  client_email: string | null;
+  client_state: string | null;
+  carrier: string;
+  product_type: string;
+  policy_number: string | null;
+  premium_amount: number | null;
+  effective_date: string | null;
+  billing_mode: string | null;
+  notes: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export const RESERVED_SLUGS = new Set([
   'life', 'field', 'direct-pay', 'telesales', 'hip', 'hip-career', 'hip-broker',
   'field-hip', 'direct-pay-hip', 'telesales-hip', 'thank-you',
