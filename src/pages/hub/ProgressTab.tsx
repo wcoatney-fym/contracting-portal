@@ -114,7 +114,7 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({
       </div>
 
       {/* ── Writing Number Upload — only after IAA + Bill.com complete (stageIdx ≥ 3) ── */}
-      {!agent.is_rts && stageIdx >= 3 && (
+      {!agent.is_rts && stageIdx >= 4 && (
         <WritingNumberUpload
           agentId={agent.agent_id}
           verifiedCarriers={verifiedCarriers}
