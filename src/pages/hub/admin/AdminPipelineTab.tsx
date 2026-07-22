@@ -3,7 +3,7 @@ import {
   PenLine, ChevronDown, Clock, Loader2, Search, Users,
   CheckCircle2, ArrowRight, Sparkles,
 } from 'lucide-react';
-import type { PipelineAgent } from './adminTypes';
+import type { PipelineAgent, PipelineAgentDetail } from './adminTypes';
 import type { AgentPipelineStage, AgentPipelineStageStep } from '../../../lib/supabase';
 import {
   STAGE_LABELS, STAGE_COLORS, STAGE_DOT_COLORS, ALL_STAGES,
@@ -16,6 +16,8 @@ interface Props {
   stageSteps: AgentPipelineStageStep[];
   /** email → number of verified writing numbers */
   wnVerifiedByEmail: Map<string, number>;
+  /** email → enriched agent detail for card expansion */
+  agentDetails: Map<string, PipelineAgentDetail>;
   onStageChange: (agentId: string, newStage: AgentPipelineStage, updatedBy: string) => Promise<boolean>;
 }
 
@@ -65,10 +67,11 @@ const WN_RELEVANT_STAGES = new Set<AgentPipelineStage>([
   'in_contracting', 'rts', 'crm', 'hip_broker_ready', 'hip_career_ready', 'actively_selling',
 ]);
 
-export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, wnVerifiedByEmail, onStageChange }) => {
+export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, wnVerifiedByEmail, agentDetails, onStageChange }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [search, setSearch] = useState('');
   const [editState, setEditState] = useState<StageEditState | null>(null);
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (text: string, type: 'success' | 'error') => {
@@ -198,11 +201,14 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, wnVeri
                     const stale = days > 14 && stage !== 'actively_selling' && stage !== 'terminated' && stage !== 'rts';
                     const progress = computeStepProgress(a, stageSteps);
                     const recent = isRecentlyUpdated(a);
+                    const isExpanded = expandedCardId === a.id;
+                    const email = (a.email ?? '').toLowerCase();
+                    const detail = agentDetails.get(email) ?? null;
 
                     return (
                       <div
                         key={a.id}
-                        className={`bg-white rounded-xl border shadow-sm p-3.5 transition-all ${
+                        className={`bg-white rounded-xl border shadow-sm transition-all cursor-pointer ${
                           progress.allComplete
                             ? 'border-emerald-300 ring-1 ring-emerald-200 shadow-emerald-100'
                             : recent
@@ -211,7 +217,9 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, wnVeri
                                 ? 'border-amber-200'
                                 : 'border-gray-100'
                         }`}
+                        onClick={() => setExpandedCardId(isExpanded ? null : a.id)}
                       >
+                        <div className="p-3.5">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
@@ -219,6 +227,7 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, wnVeri
                               {recent && (
                                 <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                               )}
+                              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                             </div>
                             {a.agency && <p className="text-[11px] text-gray-400 truncate">{a.agency}</p>}
                           </div>
@@ -229,7 +238,7 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, wnVeri
                               {progress.completedCount}/{progress.total}
                             </span>
                           )}
-                          <button onClick={() => openEdit(a)} className="shrink-0 text-gray-400 hover:text-navy-600 p-0.5 transition-colors">
+                          <button onClick={(e) => { e.stopPropagation(); openEdit(a); }} className="shrink-0 text-gray-400 hover:text-navy-600 p-0.5 transition-colors">
                             <PenLine className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -308,6 +317,119 @@ export const AdminPipelineTab: React.FC<Props> = ({ pipeline, stageSteps, wnVeri
                           )}
                           <span className="ml-auto">by {a.last_updated_by_display || a.last_updated_by}</span>
                         </div>
+                        </div>{/* end p-3.5 wrapper */}
+
+                        {/* Expanded detail panel */}
+                        {isExpanded && (
+                          <div className="border-t border-gray-100 px-3.5 py-3 space-y-3 text-[11px] bg-gray-50/50" onClick={e => e.stopPropagation()}>
+
+                            {/* Contact info */}
+                            <div>
+                              <p className="font-bold text-gray-700 uppercase tracking-wider text-[9px] mb-1">Contact</p>
+                              <div className="space-y-0.5 text-gray-600">
+                                {a.email && <p>{a.email}</p>}
+                                {a.phone && <p>{a.phone}</p>}
+                                {detail?.npn && <p>NPN: {detail.npn}</p>}
+                                {detail?.form_type && <p>Type: {detail.form_type}</p>}
+                              </div>
+                            </div>
+
+                            {/* Intake info */}
+                            {detail?.intake ? (
+                              <div>
+                                <p className="font-bold text-gray-700 uppercase tracking-wider text-[9px] mb-1">Intake</p>
+                                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-gray-600">
+                                  {detail.intake.resident_state && <p>State: {detail.intake.resident_state}</p>}
+                                  {detail.intake.state_licenses?.length > 0 && <p>Licenses: {detail.intake.state_licenses.join(', ')}</p>}
+                                  {detail.intake.agent_type && <p>Agent: {detail.intake.agent_type}</p>}
+                                  {detail.intake.ssn && <p>SSN: ***-**-{detail.intake.ssn.slice(-4)}</p>}
+                                  {detail.intake.resident_license_number && <p>Lic#: {detail.intake.resident_license_number}</p>}
+                                  {detail.intake.release_needed && <p>Release: {detail.intake.release_needed}</p>}
+                                  {detail.intake.ctm_acknowledgment && <p>CTM: {detail.intake.ctm_acknowledgment}</p>}
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="font-bold text-gray-700 uppercase tracking-wider text-[9px] mb-1">Intake</p>
+                                <p className="text-gray-400 italic">No intake form submitted</p>
+                              </div>
+                            )}
+
+                            {/* Training info */}
+                            {detail?.training && (
+                              <div>
+                                <p className="font-bold text-gray-700 uppercase tracking-wider text-[9px] mb-1">Training</p>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                                    <div
+                                      className="bg-navy-600 h-1.5 rounded-full transition-all"
+                                      style={{ width: `${detail.training.completionPct}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-gray-600 font-semibold">{detail.training.completionPct}%</span>
+                                </div>
+                                <div className="flex gap-3 text-gray-600">
+                                  <span>{detail.training.videosWatched} videos</span>
+                                  <span>{detail.training.quizzesPassed} quizzes passed</span>
+                                </div>
+                                {detail.training.lastActivity && (
+                                  <p className="text-gray-400 mt-0.5">Last activity: {timeAgo(detail.training.lastActivity)}</p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Current stage */}
+                            <div>
+                              <p className="font-bold text-gray-700 uppercase tracking-wider text-[9px] mb-1">Stage</p>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${STAGE_COLORS[a.stage] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {STAGE_LABELS[a.stage] ?? a.stage}
+                              </span>
+                              <span className="text-gray-400 ml-2">{days}d in stage</span>
+                            </div>
+
+                            {/* Tags */}
+                            {a.tags && a.tags.length > 0 && (
+                              <div>
+                                <p className="font-bold text-gray-700 uppercase tracking-wider text-[9px] mb-1">Tags</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {a.tags.map(tag => (
+                                    <span key={tag} className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-navy-50 text-navy-600 border border-navy-100">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Writing numbers */}
+                            <div>
+                              <p className="font-bold text-gray-700 uppercase tracking-wider text-[9px] mb-1">Writing Numbers</p>
+                              {detail && detail.lob_assignments.length > 0 ? (
+                                <div className="space-y-1">
+                                  {detail.lob_assignments.map((lob, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                      <span className="font-semibold text-gray-700">{lob.carrier}</span>
+                                      <span className="font-mono text-gray-600">{lob.writing_number}</span>
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-red-500 font-medium">Incomplete — no writing numbers submitted</p>
+                              )}
+                            </div>
+
+                            {/* CRM status */}
+                            {detail && (
+                              <div>
+                                <p className="font-bold text-gray-700 uppercase tracking-wider text-[9px] mb-1">CRM</p>
+                                <p className={detail.crm_onboarded ? 'text-emerald-600 font-medium' : 'text-gray-400'}>
+                                  {detail.crm_onboarded ? 'Onboarded ✓' : 'Not yet onboarded'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

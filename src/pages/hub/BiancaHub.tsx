@@ -6,7 +6,7 @@ import {
   RefreshCw, Loader2,
 } from 'lucide-react';
 import type {
-  AdminTab, PipelineAgent, TrainingEvent, TrainingContentItem,
+  AdminTab, PipelineAgent, PipelineAgentDetail, TrainingEvent, TrainingContentItem,
   LiveSessionItem, HubLogin, LiveAttendance, AgentSummary, ContentStat, AdminAgent,
   IntakeRecord, LobAssignment,
 } from './admin/adminTypes';
@@ -130,6 +130,39 @@ export const BiancaHub: React.FC = () => {
     }
     return map;
   }, [agents, lobAssignments]);
+
+  // Pipeline agent detail lookup by lowercase email
+  const pipelineDetailByEmail = useMemo(() => {
+    const totalContent = content.length;
+    const map = new Map<string, PipelineAgentDetail>();
+    for (const a of agents) {
+      const email = (a.email ?? '').toLowerCase();
+      if (!email) continue;
+      const agentEvents = events.filter(e => e.agent_id === a.id);
+      const videoViews = new Set(agentEvents.filter(e => e.event_type === 'video_view' && e.content_id).map(e => e.content_id!));
+      const quizPasses = new Set(agentEvents.filter(e => e.event_type === 'quiz_pass' && e.content_id).map(e => e.content_id!));
+      const completedIds = new Set([...videoViews, ...quizPasses]);
+      const lastEvent = agentEvents[0]?.created_at ?? null;
+      map.set(email, {
+        agent_id: a.id,
+        email: a.email,
+        phone: a.phone,
+        npn: a.npn,
+        form_type: a.form_type,
+        crm_onboarded: a.crm_onboarded ?? false,
+        intake: intakeMap.get(a.id) ?? null,
+        lob_assignments: lobMap.get(a.id) ?? [],
+        training: {
+          videosWatched: videoViews.size,
+          quizzesPassed: quizPasses.size,
+          totalContent,
+          completionPct: totalContent > 0 ? Math.round((completedIds.size / totalContent) * 100) : 0,
+          lastActivity: lastEvent,
+        },
+      });
+    }
+    return map;
+  }, [agents, events, content, intakeMap, lobMap]);
 
   // Agent summaries for Dashboard + Agents tabs
   const agentSummaries: AgentSummary[] = useMemo(() => {
@@ -409,6 +442,7 @@ export const BiancaHub: React.FC = () => {
                 pipeline={pipeline}
                 stageSteps={stageSteps}
                 wnVerifiedByEmail={wnVerifiedByEmail}
+                agentDetails={pipelineDetailByEmail}
                 onStageChange={handleStageChange}
               />
             )}
