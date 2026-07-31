@@ -19,16 +19,15 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const loadMainAgencies = async () => {
+    const loadParentAgencies = async () => {
       const { data } = await supabase
         .from('hierarchy_agencies')
         .select('*')
-        .eq('agency_type', 'main')
         .eq('is_active', true)
         .order('name');
       setMainAgencies(data || []);
     };
-    loadMainAgencies();
+    loadParentAgencies();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -208,7 +207,7 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
                 ))}
               </select>
               {mainAgencies.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">No active main agencies found. Create a main agency first.</p>
+                <p className="text-xs text-amber-600 mt-1">No active agencies found. Create an agency first.</p>
               )}
             </div>
           )}
