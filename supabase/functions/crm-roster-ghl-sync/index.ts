@@ -6,11 +6,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  * Replaces the broken Zapier integration. When an agent is added/edited
  * on the CRM roster, this function:
  *   1. Resolves the agency name → per-agency API key + GHL location ID
- *   2. PUTs custom values to the agency's GHL subaccount
+ *   2. Updates custom values in the agency's GHL subaccount (individual PUTs)
  *   3. For dual-account agencies (FYM, MHA IFG, MHA YFMO) → also pushes to Sunfire
- *   4. POSTs to create a GHL user in the agency subaccount (if action=add)
+ *   4. Creates a GHL user in the agency subaccount (if action=add and email provided)
  *
- * Payload matches the existing crm-onboarding-webhook format exactly.
+ * GHL custom value key format: "Agent #{seatNumber} | {fieldName}"
+ * Each custom value has its own ID — must GET all, find by name, then PUT by ID.
+ * If a custom value doesn't exist yet, POST to create it.
  */
 
 const corsHeaders = {
@@ -75,49 +77,79 @@ const AGENCY_GHL_MAP: Record<string, AgencyGhlConfig> = {
 // ── GHL API helpers ─────────────────────────────────────────────────────
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
+const GHL_API_VERSION = "2021-07-28";
 
-/**
- * Build the custom values object for a single seat.
- * Key format: "Agent #{seatNumber} {fieldName}"
- * Matches the exact Zapier Step 28 payload.
- */
-function buildCustomValues(payload: RosterPayload): Record<string, string> {
-  const s = payload.seatNumber;
-  return {
-    [`Agent #${s} CRM #`]: payload.crmNumber,
-    [`Agent #${s} First Name`]: payload.firstName,
-    [`Agent #${s} Full Name`]: `${payload.firstName} ${payload.lastName}`.trim(),
-    [`Agent #${s} Mobile #`]: payload.phone,
-    [`Agent #${s} NPN`]: payload.agentNpn,
-    [`Agent #${s} Professional Image`]: payload.profileImage,
-    [`Agent #${s} Title`]: "Licensed Insurance Agent",
-    [`Agent #${s} Work Email`]: payload.email,
-    [`Agent #${s} Calendar Embed Code`]: payload.calendarEmbedCode,
-    [`Agent #${s} Digital Business Card Home Page`]: payload.digitalBusinessCardUrl,
-    [`Agent #${s} Appt Booked Confirmation Page`]: payload.confirmationPageUrl,
-  };
+interface GhlCustomValue {
+  id: string;
+  name: string;
+  value: string;
+  fieldKey?: string;
 }
 
 /**
- * Push custom values to a GHL location.
- * Uses PUT /locations/{locationId}/customValues — per-location API key required.
+ * Fetch all custom values for a location.
+ * Returns a map of name → { id, value } for quick lookup.
  */
-async function pushCustomValues(
+async function getCustomValues(
   locationId: string,
   apiKey: string,
-  customValues: Record<string, string>,
-): Promise<{ ok: boolean; status: number; error?: string }> {
+): Promise<{ ok: boolean; map: Map<string, GhlCustomValue>; error?: string }> {
   try {
     const res = await fetch(
       `${GHL_API_BASE}/locations/${locationId}/customValues`,
+      {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Version": GHL_API_VERSION,
+          "Accept": "application/json",
+        },
+      },
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      return { ok: false, map: new Map(), error: `GET customValues ${res.status}: ${body}` };
+    }
+
+    const data = await res.json();
+    const cvs: GhlCustomValue[] = data.customValues || [];
+    const map = new Map<string, GhlCustomValue>();
+    for (const cv of cvs) {
+      map.set(cv.name, cv);
+    }
+
+    return { ok: true, map };
+  } catch (err) {
+    return {
+      ok: false,
+      map: new Map(),
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Update an existing custom value by ID.
+ */
+async function updateCustomValue(
+  locationId: string,
+  apiKey: string,
+  cvId: string,
+  name: string,
+  value: string,
+): Promise<{ ok: boolean; status: number; error?: string }> {
+  try {
+    const res = await fetch(
+      `${GHL_API_BASE}/locations/${locationId}/customValues/${cvId}`,
       {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`,
-          "Version": "2021-07-28",
+          "Version": GHL_API_VERSION,
         },
-        body: JSON.stringify({ customValues }),
+        body: JSON.stringify({ name, value }),
       },
     );
 
@@ -128,12 +160,126 @@ async function pushCustomValues(
     const body = await res.text();
     return { ok: false, status: res.status, error: body };
   } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    return { ok: false, status: 0, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/**
+ * Create a new custom value in a location.
+ */
+async function createCustomValue(
+  locationId: string,
+  apiKey: string,
+  name: string,
+  value: string,
+): Promise<{ ok: boolean; status: number; id?: string; error?: string }> {
+  try {
+    const res = await fetch(
+      `${GHL_API_BASE}/locations/${locationId}/customValues`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "Version": GHL_API_VERSION,
+        },
+        body: JSON.stringify({ name, value }),
+      },
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, status: res.status, id: data?.customValue?.id };
+    }
+
+    const body = await res.text();
+    return { ok: false, status: res.status, error: body };
+  } catch (err) {
+    return { ok: false, status: 0, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Build the custom values map for a single seat.
+ * Key format: "Agent #{seatNumber} | {fieldName}"
+ * Matches the actual GHL custom value naming convention.
+ */
+function buildCustomValuesMap(payload: RosterPayload): Record<string, string> {
+  const s = payload.seatNumber;
+  return {
+    [`Agent #${s} | CRM #`]: payload.crmNumber,
+    [`Agent #${s} | First Name`]: payload.firstName,
+    [`Agent #${s} | Full Name`]: `${payload.firstName} ${payload.lastName}`.trim(),
+    [`Agent #${s} | Mobile #`]: payload.phone,
+    [`Agent #${s} | NPN`]: payload.agentNpn,
+    [`Agent #${s} | Professional Image`]: payload.profileImage,
+    [`Agent #${s} | Title`]: "Licensed Insurance Agent",
+    [`Agent #${s} | Work Email`]: payload.email,
+    [`Agent #${s} | Calendar Embed Code`]: payload.calendarEmbedCode,
+    [`Agent #${s} | Digital Business Card Home Page`]: payload.digitalBusinessCardUrl,
+    [`Agent #${s} | Appt Booked Confirmation Page`]: payload.confirmationPageUrl,
+  };
+}
+
+/**
+ * Push custom values to a GHL location.
+ * 1. GET all custom values to find IDs by name
+ * 2. For each field: PUT if exists, POST if new
+ */
+async function pushCustomValues(
+  locationId: string,
+  apiKey: string,
+  customValues: Record<string, string>,
+): Promise<{
+  ok: boolean;
+  updated: number;
+  created: number;
+  failed: number;
+  errors: string[];
+}> {
+  // Step 1: Fetch existing custom values
+  const { ok: fetchOk, map, error: fetchError } = await getCustomValues(locationId, apiKey);
+  if (!fetchOk) {
+    return { ok: false, updated: 0, created: 0, failed: 0, errors: [fetchError || "Failed to fetch custom values"] };
+  }
+
+  let updated = 0;
+  let created = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  // Step 2: Update or create each custom value
+  for (const [name, value] of Object.entries(customValues)) {
+    const existing = map.get(name);
+
+    if (existing) {
+      // Custom value exists — update it
+      const result = await updateCustomValue(locationId, apiKey, existing.id, name, value);
+      if (result.ok) {
+        updated++;
+      } else {
+        failed++;
+        errors.push(`PUT ${name}: ${result.error}`);
+      }
+    } else {
+      // Custom value doesn't exist — create it
+      const result = await createCustomValue(locationId, apiKey, name, value);
+      if (result.ok) {
+        created++;
+      } else {
+        failed++;
+        errors.push(`POST ${name}: ${result.error}`);
+      }
+    }
+  }
+
+  return {
+    ok: failed === 0,
+    updated,
+    created,
+    failed,
+    errors,
+  };
 }
 
 /**
@@ -199,7 +345,11 @@ async function createGhlUser(
         exportPaymentsEnabled: false,
       },
       profilePhoto: payload.profileImage || undefined,
-      scopes: ["contacts.readonly", "conversations.readonly", "opportunities.readonly"],
+      scopes: [
+        "contacts.readonly",
+        "conversations.readonly",
+        "opportunities.readonly",
+      ],
     };
 
     const res = await fetch(`${GHL_API_BASE}/users/`, {
@@ -207,7 +357,7 @@ async function createGhlUser(
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${agencyAccessToken}`,
-        "Version": "2021-07-28",
+        "Version": GHL_API_VERSION,
       },
       body: JSON.stringify(userPayload),
     });
@@ -219,9 +369,13 @@ async function createGhlUser(
 
     const body = await res.text();
 
-    // 422 with "User already exists" is not a failure — it's expected on edits
+    // 422 with "User already exists" is not a failure — expected on edits
     if (res.status === 422 && body.includes("already exists")) {
-      return { ok: true, status: res.status, error: "User already exists (skipped)" };
+      return {
+        ok: true,
+        status: res.status,
+        error: "User already exists (skipped)",
+      };
     }
 
     return { ok: false, status: res.status, error: body };
@@ -291,19 +445,28 @@ Deno.serve(async (req: Request) => {
     if (!payload.agency) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing agency name" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
     if (!payload.seatNumber) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing seatNumber" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
     if (!payload.firstName) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing firstName" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -315,7 +478,10 @@ Deno.serve(async (req: Request) => {
           success: false,
           error: `Agency "${payload.agency}" is not configured for GHL sync. Known agencies: ${Object.keys(AGENCY_GHL_MAP).join(", ")}`,
         }),
-        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -327,7 +493,10 @@ Deno.serve(async (req: Request) => {
           success: false,
           error: `API key not found for ${config.agencyApiKeyEnv}. Add it as a Supabase function secret.`,
         }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -338,7 +507,7 @@ Deno.serve(async (req: Request) => {
     const agencyAccessToken = Deno.env.get("GHL_AGENCY_ACCESS_TOKEN");
 
     // ── Build custom values ──
-    const customValues = buildCustomValues(payload);
+    const customValues = buildCustomValuesMap(payload);
 
     const results: Record<string, unknown> = {};
 
@@ -372,8 +541,12 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    // ── Step 3: Create GHL user (agency subaccount only, on add) ──
-    if (payload.action !== "terminate" && agencyAccessToken && payload.email) {
+    // ── Step 3: Create GHL user (agency subaccount only, on add, with email) ──
+    if (
+      payload.action !== "terminate" &&
+      agencyAccessToken &&
+      payload.email
+    ) {
       const userResult = await createGhlUser(
         config.agencyLocationId,
         agencyAccessToken,
@@ -390,8 +563,13 @@ Deno.serve(async (req: Request) => {
       };
     } else if (!payload.email) {
       results.userCreation = {
-        ok: false,
+        ok: true,
         error: "No email provided — user creation skipped",
+      };
+    } else if (payload.action === "terminate") {
+      results.userCreation = {
+        ok: true,
+        error: "Terminate action — user creation skipped",
       };
     }
 
