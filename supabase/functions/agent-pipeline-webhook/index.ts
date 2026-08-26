@@ -120,18 +120,20 @@ Deno.serve(async (req: Request) => {
       .eq("ghl_opportunity_id", ghlOpportunityId)
       .maybeSingle();
 
-    // LOOP GUARD: if stage matches, was last updated by UI, and is synced,
-    // this is the echo bounce-back from our own push -- skip it
+    // LOOP GUARD (primary): if stage already matches the incoming stage,
+    // and the record was last updated by something other than ghl_webhook,
+    // this is an echo bounce-back from our own push — skip it.
+    // The tag-based guard in the GHL workflow is the first line of defense;
+    // this DB-side check is the belt-and-suspenders fallback.
     if (
       existing &&
       existing.stage === stageMapping.internal_stage &&
-      existing.last_updated_by === "ui" &&
-      existing.ghl_sync_status === "synced"
+      existing.last_updated_by !== "ghl_webhook"
     ) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Echo detected (UI push bounce-back), skipping",
+          message: "Echo detected (stage unchanged, non-GHL source), skipping",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

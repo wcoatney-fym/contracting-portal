@@ -9,6 +9,7 @@ const corsHeaders = {
 };
 
 const GHL_BASE = "https://services.leadconnectorhq.com";
+const SUPPRESSION_TAG = "app | contracting pipeline trigger";
 
 function normalizePhone(phone: string): string {
   return phone.replace(/[^\d+]/g, "");
@@ -198,6 +199,55 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Add suppression tag to prevent the GHL workflow from echoing back.
+    // The GHL workflow checks for this tag before firing the webhook —
+    // if present, it removes the tag and stops (no webhook sent).
+    const contactId = record.ghl_contact_id || null;
+    if (contactId) {
+      try {
+        const tagRes = await fetch(`${GHL_BASE}/contacts/${contactId}`, {
+          method: "PUT",
+          headers: ghlHeaders,
+          body: JSON.stringify({ tags: [SUPPRESSION_TAG] }),
+        });
+        if (!tagRes.ok) {
+          console.warn(`Failed to add suppression tag: ${tagRes.status}`);
+        }
+      } catch (tagErr) {
+        console.warn("Failed to add suppression tag:", tagErr);
+        // Non-fatal — push still succeeded
+      }
+    } else if (opportunityId) {
+      // No stored contact ID — try to get it from the opportunity
+      try {
+        const oppRes = await fetch(`${GHL_BASE}/opportunities/${opportunityId}`, {
+          headers: ghlHeaders,
+        });
+        if (oppRes.ok) {
+          const oppData = await oppRes.json();
+          const resolvedContactId = oppData.opportunity?.contactId || oppData.contactId || null;
+          if (resolvedContactId) {
+            // Add the tag
+            const tagRes = await fetch(`${GHL_BASE}/contacts/${resolvedContactId}`, {
+              method: "PUT",
+              headers: ghlHeaders,
+              body: JSON.stringify({ tags: [SUPPRESSION_TAG] }),
+            });
+            if (!tagRes.ok) {
+              console.warn(`Failed to add suppression tag (resolved contact): ${tagRes.status}`);
+            }
+            // Store the contact ID for next time
+            await supabase
+              .from("agent_pipeline")
+              .update({ ghl_contact_id: resolvedContactId })
+              .eq("id", record_id);
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+
     // Success -- update local record
     const { data: updated } = await supabase
       .from("agent_pipeline")
@@ -219,7 +269,7 @@ Deno.serve(async (req: Request) => {
     await supabase.from("webhook_log").insert({
       source: "push-pipeline-stage",
       event_type: "push_success",
-      payload: { record_id, new_stage, opportunity_id: opportunityId, matched_by_phone: matchedByPhone },
+      payload: { record_id, new_stage, opportunity_id: opportunityId, matched_by_phone: matchedByPhone, suppression_tag_added: !!contactId },
     });
 
     return new Response(
