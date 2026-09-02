@@ -58,18 +58,28 @@ const PasswordGate: React.FC<{ agencyName: string; onSuccess: () => void }> = ({
     e.preventDefault();
     setChecking(true);
     setError('');
-    const { data } = await supabase
-      .from('hierarchy_agencies')
-      .select('portal_password')
-      .eq('name', agencyName)
-      .maybeSingle();
-
-    if (data?.portal_password === password) {
-      onSuccess();
-    } else {
-      setError('Incorrect password');
-      setShake(true);
-      setTimeout(() => setShake(false), 500);
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-portal-password`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ slug: agencyName, password }),
+        },
+      );
+      const result = await res.json();
+      if (result.valid) {
+        onSuccess();
+      } else {
+        setError('Incorrect password');
+        setShake(true);
+        setTimeout(() => setShake(false), 500);
+      }
+    } catch {
+      setError('Unable to verify — please try again');
     }
     setChecking(false);
   };
