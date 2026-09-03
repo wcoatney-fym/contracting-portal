@@ -29,9 +29,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Sanitize slug — alphanumeric + hyphens + spaces only, max 100 chars
+    // Sanitize slug — alphanumeric + hyphens + spaces + common punctuation, max 100 chars
     const cleanSlug = slug.trim().slice(0, 100);
-    if (!/^[\w\s\-&'.]+$/i.test(cleanSlug)) {
+    if (!/^[\w\s\-&'.,]+$/i.test(cleanSlug)) {
       return new Response(
         JSON.stringify({ valid: false, error: "Invalid slug format" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
