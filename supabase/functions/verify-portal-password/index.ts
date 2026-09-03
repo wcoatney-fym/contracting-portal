@@ -42,11 +42,39 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Read portal_password from the BASE TABLE (not the view)
-    // The hierarchy_agencies view excludes portal_password (barrier view migration).
-    // Service_role reads from _hierarchy_agencies to access the column.
+    // Two-path verification: eliminates any deploy ordering dependency.
+    //
+    // Path 1 (post-migration): Call the verify_portal_password RPC.
+    //   The RPC is SECURITY DEFINER — reads portal_password from the base
+    //   table (_hierarchy_agencies) and returns a boolean match. The password
+    //   never leaves the DB. Created atomically in the barrier view migration.
+    //
+    // Path 2 (pre-migration fallback): If the RPC does not exist yet, fall
+    //   back to reading portal_password from hierarchy_agencies directly
+    //   (the base table, pre-rename). This keeps logins working during the
+    //   window between edge function deploy and migration.
+    //
+    // Result: deploy this edge function and run the migration in any order.
+    //   Zero downtime window.
+
+    // Try the RPC first (post-migration path)
+    const { data: rpcResult, error: rpcError } = await supabase
+      .rpc("verify_portal_password", {
+        p_slug: cleanSlug,
+        p_password: password,
+      });
+
+    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
+      // RPC exists and returned a result — use it
+      return new Response(
+        JSON.stringify({ valid: rpcResult }),
+        { status: rpcResult ? 200 : 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // RPC not found (pre-migration) — fall back to direct table read
     const { data, error } = await supabase
-      .from("_hierarchy_agencies")
+      .from("hierarchy_agencies")
       .select("portal_password")
       .eq("name", cleanSlug)
       .maybeSingle();
@@ -58,7 +86,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Constant-time-ish comparison to avoid timing attacks
+    // Constant-time-ish comparison
     const stored = data.portal_password;
     const valid = stored.length === password.length &&
       stored.split("").every((c: string, i: number) => c === password[i]);
