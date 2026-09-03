@@ -1101,21 +1101,48 @@ const PortalSettingsCard: React.FC<{
   onAgencyUpdated: (a: CrmAgency) => void;
 }> = ({ agency, onAgencyUpdated }) => {
   const [editing, setEditing] = useState(false);
-  const [password, setPassword] = useState(agency.portal_password || '');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // portal_password is excluded from the hierarchy_agencies view (barrier view).
+  // Fetch it separately using the authenticated session (admin pages use signInWithPassword).
+  React.useEffect(() => {
+    supabase
+      .from('_hierarchy_agencies')
+      .select('portal_password')
+      .eq('id', agency.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.portal_password) setPassword(data.portal_password);
+      });
+  }, [agency.id]);
 
   const handleSave = async () => {
     if (!password.trim()) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('hierarchy_agencies')
-      .update({ portal_password: password.trim(), updated_at: new Date().toISOString() })
-      .eq('id', agency.id);
-
-    if (!error) {
-      onAgencyUpdated({ ...agency, portal_password: password.trim() });
-      setEditing(false);
+    try {
+      // portal_password is excluded from the hierarchy_agencies view (barrier view).
+      // Use the set-portal-password edge function to write to the base table.
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/set-portal-password`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || ''}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+          },
+          body: JSON.stringify({ agency_id: agency.id, password: password.trim() }),
+        }
+      );
+      if (res.ok) {
+        onAgencyUpdated({ ...agency, portal_password: password.trim() });
+        setEditing(false);
+      }
+    } catch (err) {
+      console.error('Failed to update portal password:', err);
     }
     setSaving(false);
   };
@@ -1159,7 +1186,7 @@ const PortalSettingsCard: React.FC<{
                 {saving ? 'Saving...' : 'Save'}
               </button>
               <button
-                onClick={() => { setEditing(false); setPassword(agency.portal_password || ''); }}
+                onClick={() => { setEditing(false); /* password state already holds the fetched value */ }}
                 className="px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 Cancel
@@ -1167,7 +1194,7 @@ const PortalSettingsCard: React.FC<{
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-900 font-mono">{agency.portal_password || '--'}</span>
+              <span className="text-sm text-gray-900 font-mono">{password || '--'}</span>
               <button
                 onClick={() => setEditing(true)}
                 className="text-xs text-navy-600 hover:underline"

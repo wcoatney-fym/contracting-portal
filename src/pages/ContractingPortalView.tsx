@@ -452,7 +452,7 @@ const AddSubAgencyModal: React.FC<{
         is_active: true,
         crm_enabled: false,
         slug,
-        portal_password: portalPassword,
+        // portal_password removed — DB trigger auto-sets '{name}CRMPortal!'
         date_created: new Date().toISOString().slice(0, 10),
         agency_npn: agencyNpn.trim() || null,
         agency_ein: agencyEin.trim() || null,

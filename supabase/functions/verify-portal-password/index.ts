@@ -42,9 +42,11 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Read portal_password using service_role — anon cannot read this column after REVOKE
+    // Read portal_password from the BASE TABLE (not the view)
+    // The hierarchy_agencies view excludes portal_password (barrier view migration).
+    // Service_role reads from _hierarchy_agencies to access the column.
     const { data, error } = await supabase
-      .from("hierarchy_agencies")
+      .from("_hierarchy_agencies")
       .select("portal_password")
       .eq("name", cleanSlug)
       .maybeSingle();
