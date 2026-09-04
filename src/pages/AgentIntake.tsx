@@ -270,6 +270,12 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
 
       if (error) throw error;
 
+      // Write security code to barrier table (anon-unreadable)
+      await supabase.from('agent_security_codes').insert({
+        agent_id: agent.id,
+        security_code: securityCode,
+      });
+
       const formUrl = generateFormUrl(formData.formType, agent.id);
 
       await supabase

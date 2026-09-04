@@ -116,6 +116,11 @@ export const AgentTracking: React.FC = () => {
       })
       .eq('id', agent.id);
 
+    // Update barrier table with new code
+    await supabase.from('agent_security_codes').update({
+      security_code: newCode,
+    }).eq('agent_id', agent.id);
+
     await supabase.from('activity_log').insert({
       agent_id: agent.id,
       action: 'link_resent',

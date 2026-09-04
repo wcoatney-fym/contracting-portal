@@ -64,6 +64,12 @@ const autoSendForm = async (params: AutoSendParams) => {
 
   if (agentError) throw agentError;
 
+  // Write security code to barrier table (anon-unreadable)
+  await supabase.from("agent_security_codes").insert({
+    agent_id: agent.id,
+    security_code: securityCode,
+  });
+
   const formUrl = `${baseUrl}${FORM_ROUTE_MAP[formType]}?id=${agent.id}`;
 
   await supabase
