@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
-import { supabase, Agent } from '../lib/supabase';
+import { Agent } from '../lib/supabase';
 
 interface SecurityCodeGateProps {
   onSuccess: (agent: Agent) => void;
@@ -18,45 +18,34 @@ export const SecurityCodeGate: React.FC<SecurityCodeGateProps> = ({ onSuccess, f
     setLoading(true);
 
     try {
-      const { data: agent, error: fetchError } = await supabase
-        .from('agents')
-        .select('*')
-        .eq('id', formId)
-        .eq('security_code', code)
-        .single();
+      // Server-side validation via edge function — security_code is validated
+      // against the agent_security_codes barrier table (anon-unreadable).
+      // The code never leaves the DB until the caller proves they know it.
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-security-code`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ formId, securityCode: code }),
+        },
+      );
+      const result = await res.json();
 
-      if (fetchError || !agent) {
-        setError('Invalid security code. Please try again.');
+      if (!result.valid) {
+        if (result.expired) {
+          setError('This link has expired. Please contact Contracting@teamfym.com');
+        } else {
+          setError('Invalid security code. Please try again.');
+        }
         setLoading(false);
         return;
       }
 
-      const now = new Date();
-      const expirationDate = new Date(agent.expiration_date);
-
-      if (now > expirationDate) {
-        setError('This link has expired. Please contact Contracting@teamfym.com');
-        setLoading(false);
-        return;
-      }
-
-      if (agent.status === 'pending') {
-        await supabase
-          .from('agents')
-          .update({ status: 'in-progress' })
-          .eq('id', agent.id);
-
-        await supabase.from('activity_log').insert({
-          agent_id: agent.id,
-          action: 'form_accessed',
-          details: `${agent.first_name} ${agent.last_name} accessed the form`,
-        });
-
-        agent.status = 'in-progress';
-      }
-
-      onSuccess(agent);
-    } catch (err) {
+      onSuccess(result.agent as Agent);
+    } catch {
       setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
