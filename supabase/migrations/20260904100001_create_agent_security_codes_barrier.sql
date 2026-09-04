@@ -14,9 +14,9 @@
   - Same barrier pattern as agent_intake_safe (SSNs) and portal_credentials (passwords)
 
   Grants:
-  - anon: INSERT + UPDATE only (frontends create/resend codes as anon)
-  - anon: SELECT granted but blocked by RLS policy (needed for PostgREST PATCH)
-  - No SELECT data returned to anon (RLS USING(false) on SELECT policy)
+  - anon: INSERT + UPDATE + SELECT (SELECT blocked by RLS — needed for PostgREST PATCH)
+  - authenticated: same as anon (admin tab uses ensurePortalAuth → authenticated role)
+  - No SELECT data returned to anon or authenticated (RLS USING(false) on SELECT policies)
   - service_role: full access (bypasses RLS)
 
   Migration already applied to live DB via Management API.
@@ -44,8 +44,10 @@ ALTER TABLE public.agent_security_codes ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.agent_security_codes FROM anon;
 REVOKE ALL ON public.agent_security_codes FROM authenticated;
 
--- anon needs INSERT (new agent creation) and UPDATE (resend-link)
+-- anon + authenticated need INSERT (new agent creation) and UPDATE (resend-link)
+-- SELECT granted but blocked by RLS (needed for PostgREST PATCH internals)
 GRANT INSERT, UPDATE, SELECT ON public.agent_security_codes TO anon;
+GRANT INSERT, UPDATE, SELECT ON public.agent_security_codes TO authenticated;
 
 -- RLS: anon can INSERT and UPDATE, but SELECT returns zero rows
 CREATE POLICY "anon_select_deny" ON public.agent_security_codes
@@ -56,6 +58,16 @@ CREATE POLICY "anon_insert_codes" ON public.agent_security_codes
 
 CREATE POLICY "anon_update_codes" ON public.agent_security_codes
   FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+-- RLS: authenticated same pattern — admin tab uses ensurePortalAuth()
+CREATE POLICY "authenticated_select_deny" ON public.agent_security_codes
+  FOR SELECT TO authenticated USING (false);
+
+CREATE POLICY "authenticated_insert_codes" ON public.agent_security_codes
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "authenticated_update_codes" ON public.agent_security_codes
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
 -- Updated_at trigger
 CREATE OR REPLACE FUNCTION public.update_agent_security_codes_updated_at()
