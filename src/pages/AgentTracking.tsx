@@ -107,10 +107,10 @@ export const AgentTracking: React.FC = () => {
     const newExpiration = new Date();
     newExpiration.setHours(newExpiration.getHours() + 72);
 
+    // security_code lives in agent_security_codes barrier table, NOT in agents
     await supabase
       .from('agents')
       .update({
-        security_code: newCode,
         status: 'pending',
         expiration_date: newExpiration.toISOString(),
       })

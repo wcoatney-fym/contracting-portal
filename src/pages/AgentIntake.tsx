@@ -251,6 +251,7 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
         'HIP Broker': 'hip-broker',
       };
 
+      // security_code lives in agent_security_codes barrier table, NOT in agents
       const { data: agent, error } = await supabase
         .from('agents')
         .insert({
@@ -260,7 +261,6 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
           phone: formData.phone,
           form_type: formTypeMap[formData.formType],
           agency: formData.agency,
-          security_code: securityCode,
           status: 'pending',
           expiration_date: expirationDate.toISOString(),
           form_url: 'temp',
