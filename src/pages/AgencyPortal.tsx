@@ -1,25 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Building2, Lock, ShieldCheck, BarChart3, Users, MessageSquareText, Headphones as HeadphonesIcon, LogOut, AlertCircle, BookOpen, Clock, Upload, Package, FileText } from 'lucide-react';
+import { Building2, Lock, ShieldCheck, Users, MessageSquareText, Headphones as HeadphonesIcon, LogOut, AlertCircle, Clock, Upload, Package, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { CrmAgency } from '../lib/supabase';
-import { PortalDashboardTab } from './portal/PortalDashboardTab';
 import { PortalAgentsTab } from './portal/PortalAgentsTab';
 import { PortalTicketsTab } from './portal/PortalTicketsTab';
 import { PortalCsrTab } from './portal/PortalCsrTab';
 import { PortalOnboardingView } from './portal/PortalOnboardingView';
-import { PortalBookTab } from './portal/PortalBookTab';
 import { PortalCancellationsTab } from './portal/PortalCancellationsTab';
 import { PortalCrossSellTab } from './portal/PortalCrossSellTab';
 import { PortalIntakeTab } from './portal/PortalIntakeTab';
 import { AgencyFilter } from './portal/AgencyFilter';
 
-type PortalTab = 'dashboard' | 'agents' | 'book' | 'intake' | 'cancellations' | 'cross-sell' | 'tickets' | 'csr';
+type PortalTab = 'agents' | 'intake' | 'cancellations' | 'cross-sell' | 'tickets' | 'csr';
 
 const TAB_ITEMS: { key: PortalTab; label: string; icon: React.FC<{ className?: string }> }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: BarChart3 },
   { key: 'agents', label: 'Agent Management', icon: Users },
-  { key: 'book', label: 'Book of Business', icon: BookOpen },
   { key: 'intake', label: 'New Business', icon: FileText },
   { key: 'cancellations', label: 'Cancellation Upload', icon: Upload },
   { key: 'cross-sell', label: 'Cross-Sell', icon: Package },
@@ -152,7 +148,7 @@ export const AgencyPortal: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState<PortalTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<PortalTab>('agents');
 
   const allAgencies = agency ? [agency, ...childAgencies] : [];
   const selectedAgencyNames = allAgencies
@@ -322,22 +318,8 @@ export const AgencyPortal: React.FC = () => {
                 <ComingSoonOverlay />
               ) : (
                 <>
-                  {activeTab === 'dashboard' && (
-                    <PortalDashboardTab
-                      agency={agency}
-                      agencyIds={selectedAgencyIds}
-                      agencyNames={selectedAgencyNames}
-                    />
-                  )}
                   {activeTab === 'agents' && (
                     <PortalAgentsTab
-                      agency={agency}
-                      agencyIds={selectedAgencyIds}
-                      agencyNames={selectedAgencyNames}
-                    />
-                  )}
-                  {activeTab === 'book' && (
-                    <PortalBookTab
                       agency={agency}
                       agencyIds={selectedAgencyIds}
                       agencyNames={selectedAgencyNames}
