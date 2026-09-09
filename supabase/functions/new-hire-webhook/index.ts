@@ -54,7 +54,6 @@ const autoSendForm = async (params: AutoSendParams) => {
       phone: phoneNumber,
       form_type: formType,
       agency: agency,
-      security_code: securityCode,
       status: "pending",
       expiration_date: expirationDate.toISOString(),
       form_url: "temp",
