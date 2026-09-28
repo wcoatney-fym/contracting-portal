@@ -63,6 +63,77 @@ function mapContactStatus(
   return "active";
 }
 
+/**
+ * Resolve the location's "Client Status" custom field ID by name.
+ * GHL custom field IDs are per-location, so this must run per agency.
+ */
+async function resolveClientStatusFieldId(
+  locationId: string,
+  headers: GhlHeaders,
+): Promise<string | null> {
+  const res = await fetchWithRetry(
+    `${GHL_BASE}/locations/${locationId}/customFields`,
+    headers,
+  );
+  if (!res) return null;
+  const data = await res.json();
+  const fields: { id: string; name?: string; fieldKey?: string }[] =
+    data.customFields || [];
+  const match = fields.find(
+    (f) =>
+      (f.name || "").trim().toLowerCase() === "client status" ||
+      (f.fieldKey || "").toLowerCase().endsWith("client_status"),
+  );
+  return match?.id || null;
+}
+
+/**
+ * Billable contacts = exact GHL-side count of contacts whose
+ * "Client Status" custom field equals "Active". Uses the contacts
+ * search endpoint's server-side total — no pagination involved, so the
+ * count is accurate regardless of how many contacts the location has.
+ * Returns null when the count could not be determined (missing field,
+ * API error) so callers can distinguish "0 billable" from "unknown".
+ */
+async function countBillableContacts(
+  locationId: string,
+  headers: GhlHeaders,
+  fieldId: string,
+): Promise<number | null> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const res = await fetch(`${GHL_BASE}/contacts/search`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        locationId,
+        pageLimit: 1,
+        filters: [
+          {
+            field: `customFields.${fieldId}`,
+            operator: "eq",
+            value: "Active",
+          },
+        ],
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return typeof data.total === "number" ? data.total : null;
+    }
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get("retry-after") || "3", 10);
+      await sleep(retryAfter * 1000);
+      continue;
+    }
+    if (res.status >= 500) {
+      await sleep(1000 * (attempt + 1));
+      continue;
+    }
+    return null;
+  }
+  return null;
+}
+
 interface ChunkResult {
   contacts: GhlContact[];
   nextCursor: string | null;
@@ -486,6 +557,20 @@ Deno.serve(async (req: Request) => {
     const { crossSellOpportunities, savedPolicies, cancellations } =
       computeKpisFromOpportunities(opportunities);
 
+    // Billable contacts: exact count of contacts with Client Status = Active,
+    // counted server-side by GHL (accurate independent of contact sync).
+    const clientStatusFieldId = await resolveClientStatusFieldId(
+      config.ghl_location_id,
+      ghlHeaders,
+    );
+    const billableContacts = clientStatusFieldId
+      ? await countBillableContacts(
+        config.ghl_location_id,
+        ghlHeaders,
+        clientStatusFieldId,
+      )
+      : null;
+
     const kpiRow = {
       agency_id,
       period_type: "snapshot",
@@ -512,6 +597,7 @@ Deno.serve(async (req: Request) => {
       at_risk_clients: atRiskCount || 0,
       total_policies: totalClients || 0,
       policies_this_month: policiesThisMonth || 0,
+      billable_contacts: billableContacts,
       computed_at: now.toISOString(),
     };
 
@@ -542,6 +628,8 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         complete: true,
+        billable_contacts: billableContacts,
+        client_status_field_found: Boolean(clientStatusFieldId),
         total_contacts_fetched: totalFetched,
         total_contacts_synced: clientsSynced,
         total_expected: totalExpected,
