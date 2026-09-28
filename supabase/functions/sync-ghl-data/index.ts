@@ -79,10 +79,16 @@ async function resolveClientStatusFieldId(
   const data = await res.json();
   const fields: { id: string; name?: string; fieldKey?: string }[] =
     data.customFields || [];
+  // EXACT match only. Locations carry sibling fields like
+  // "Life | Client Status" (contact.life__client_status) whose fieldKey
+  // also ends in "client_status" — a suffix match picks those first and
+  // returns 0 billable (2026-09-28 incident, verified on DH: suffix match
+  // hit 'Life | Client Status' while the real field 'Client Status'
+  // [contact.client_status] had 597 Active of 635 contacts).
   const match = fields.find(
     (f) =>
-      (f.name || "").trim().toLowerCase() === "client status" ||
-      (f.fieldKey || "").toLowerCase().endsWith("client_status"),
+      (f.fieldKey || "").toLowerCase() === "contact.client_status" ||
+      (f.name || "").trim().toLowerCase() === "client status",
   );
   return match?.id || null;
 }
