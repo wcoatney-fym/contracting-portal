@@ -65,8 +65,6 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
       }
     }
 
-    const portalPassword = `${trimmedName}CRMPortal!`;
-
     const { data: newAgency, error: insertError } = await supabase
       .from('hierarchy_agencies')
       .insert({
@@ -76,7 +74,7 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
         agency_type: agencyType,
         parent_agency_id: agencyType === 'sub' ? parentAgencyId : null,
         slug,
-        // portal_password removed — DB trigger auto-sets '{name}CRMPortal!'
+        // portal_password omitted: the DB trigger sets a random one, which is never shown or emailed.
         date_created: dateCreated || null,
         zaps_paused: existingAgency,
         crm_enabled: true,
@@ -218,10 +216,6 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
                 <Link2 className="w-3.5 h-3.5 text-gray-400" />
                 <span className="text-gray-500">Portal URL:</span>
                 <span className="font-mono font-medium text-navy-600">/{generateSlug(name.trim())}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-gray-500 ml-5.5">Password:</span>
-                <span className="font-mono font-medium text-gray-700">{name.trim()}CRMPortal!</span>
               </div>
             </div>
           )}

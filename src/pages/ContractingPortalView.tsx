@@ -440,8 +440,6 @@ const AddSubAgencyModal: React.FC<{
     setSubmitting(true);
     setError('');
 
-    const portalPassword = `${name.trim()}CRMPortal!`;
-
     const { data, error: insertErr } = await supabase
       .from('hierarchy_agencies')
       .insert({
@@ -452,7 +450,7 @@ const AddSubAgencyModal: React.FC<{
         is_active: true,
         crm_enabled: false,
         slug,
-        // portal_password removed — DB trigger auto-sets '{name}CRMPortal!'
+        // portal_password omitted: the DB trigger sets a random one, which is never shown or emailed.
         date_created: new Date().toISOString().slice(0, 10),
         agency_npn: agencyNpn.trim() || null,
         agency_ein: agencyEin.trim() || null,
