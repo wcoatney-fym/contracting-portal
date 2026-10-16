@@ -59,7 +59,6 @@ export const TestingTab: React.FC = () => {
     const now = new Date().toISOString();
     const name = 'Test';
     const slug = generateSlug(name);
-    const portalPassword = `${name}CRMPortal!`;
     const { data } = await supabase
       .from('hierarchy_agencies')
       .insert({
@@ -73,7 +72,7 @@ export const TestingTab: React.FC = () => {
         dba_confirmed: false,
         seat_count: 200,
         slug,
-        // portal_password removed — DB trigger auto-sets '{name}CRMPortal!'
+        // portal_password omitted: the DB trigger sets a random one, which is never shown or emailed.
         date_added: now,
         created_at: now,
         updated_at: now,

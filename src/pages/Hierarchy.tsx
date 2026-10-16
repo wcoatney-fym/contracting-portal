@@ -183,7 +183,6 @@ export const Hierarchy: React.FC = () => {
   }) => {
     await ensureSession();
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const portalPassword = `${name}CRMPortal!`;
 
     const { data, error } = await supabase
       .from('hierarchy_agencies')
@@ -195,7 +194,7 @@ export const Hierarchy: React.FC = () => {
         is_active: true,
         crm_enabled: false,
         slug,
-        // portal_password removed — DB trigger auto-sets '{name}CRMPortal!'
+        // portal_password omitted: the DB trigger sets a random one, which is never shown or emailed.
         date_created: new Date().toISOString().slice(0, 10),
         agency_npn: contracting.agency_npn.trim() || null,
         agency_ein: contracting.agency_ein.trim() || null,
@@ -232,7 +231,6 @@ export const Hierarchy: React.FC = () => {
     const name = submission.agency_name.trim();
     const parentId = pendingApprovalParentId || null;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const portalPassword = `${name}CRMPortal!`;
 
     // Upsert on slug: if the agency was pre-seeded from the rolodex, intake data wins
     // and overwrites the stub fields (NPN, EIN, principal agent, emails, etc.).
@@ -246,7 +244,7 @@ export const Hierarchy: React.FC = () => {
         is_active: true,
         crm_enabled: false,
         slug,
-        // portal_password removed — DB trigger auto-sets '{name}CRMPortal!'
+        // portal_password omitted: the DB trigger sets a random one, which is never shown or emailed.
         date_created: new Date().toISOString().slice(0, 10),
         agency_npn: submission.agency_npn?.trim() || null,
         agency_ein: submission.agency_ein?.trim() || null,
