@@ -17,7 +17,8 @@ import type { AgencyContact } from '../lib/supabase';
  * CRM team can see which agency initiated the intake.
  *
  * On submit: writes a `pending` row into `agency_intake_submissions` (anon INSERT
- * only, per RLS). Never touches `hierarchy_agencies` directly.
+ * only, per RLS). Never touches `hierarchy_agencies` directly. The row id is
+ * generated here because anon cannot read the row back (no `.select()` on the insert).
  */
 
 type ContactField = keyof AgencyContact;
@@ -111,9 +112,11 @@ export const AgencyIntake: React.FC = () => {
 
     setSubmitting(true);
 
-    const { data: insertResult, error: insertError } = await supabase
+    const submissionId = crypto.randomUUID();
+    const { error: insertError } = await supabase
       .from('agency_intake_submissions')
       .insert({
+        id: submissionId,
         agency_name: agencyName,
         agency_npn: form.agencyNpn.trim(),
         agency_ein: form.agencyEin.trim(),
@@ -129,17 +132,12 @@ export const AgencyIntake: React.FC = () => {
         invited_by_agency_id: invitedByAgencyId,
         invited_by_agency_name: invitedByAgencyName,
         status: 'pending',
-      })
-      .select('id')
-      .maybeSingle();
+      });
 
     setSubmitting(false);
 
-    // PGRST116 = 0 rows returned via maybeSingle (RLS blocks the read-back for anon)
-    // That’s fine — the insert still succeeded. Only hard-fail on real insert errors.
-    const realInsertError = insertError?.code === 'PGRST116' ? null : insertError;
-    if (realInsertError) {
-      setError(`Submission failed: ${realInsertError.message}`);
+    if (insertError) {
+      setError(`Submission failed: ${insertError.message}`);
       return;
     }
 
@@ -163,7 +161,7 @@ export const AgencyIntake: React.FC = () => {
       principal_agent: form.principalAgent.trim(),
       contracting_email: form.contractingEmail.trim(),
       contracting_contact: form.contractingContact.trim() || null,
-      intake_submission_id: insertResult?.id ?? null,
+      intake_submission_id: submissionId,
     });
 
     setSubmitted(true);
