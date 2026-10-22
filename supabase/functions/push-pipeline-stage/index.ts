@@ -14,6 +14,89 @@ function normalizePhone(phone: string): string {
   return phone.replace(/[^\d+]/g, "");
 }
 
+// ── DBC lifecycle hook (FYM-App PR #799 rail) ─────────────────────────────
+// Portal internal stage → dbc-lifecycle stage key. Stages absent here earn no
+// cards (Reactivated/IAA/DNF/Terminated/etc. — locked spec, Charlie 2026-10-22).
+const DBC_STAGE_KEYS: Record<string, string> = {
+  in_contracting: "in_contracting",
+  rts: "rts",
+  actively_selling_career: "as_career",
+  actively_selling_broker: "as_broker",
+};
+
+/**
+ * Fire-and-forget call to FYM-App dbc-lifecycle (action=stage_move) after a
+ * successful stage move. NEVER fails the stage push — every outcome (ok, skip,
+ * error) is logged to webhook_log as dbc_hook_*. Ships dark: with the
+ * FYM_APP_SUPABASE_URL / FYM_APP_SERVICE_ROLE_KEY secrets unset it only logs a
+ * skip. dbc-lifecycle itself enforces the kill switches + NPN allowlist.
+ */
+async function fireDbcLifecycleHook(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  record: any,
+  newStage: string,
+): Promise<void> {
+  const log = (eventType: string, payload: Record<string, unknown>) =>
+    supabase.from("webhook_log").insert({
+      source: "push-pipeline-stage",
+      event_type: eventType,
+      payload: { record_id: record.id, new_stage: newStage, ...payload },
+    });
+
+  try {
+    const dbcStage = DBC_STAGE_KEYS[newStage];
+    if (!dbcStage) return; // stage earns no cards — silent no-op by design
+
+    const appUrl = Deno.env.get("FYM_APP_SUPABASE_URL");
+    const appKey = Deno.env.get("FYM_APP_SERVICE_ROLE_KEY");
+    if (!appUrl || !appKey) {
+      await log("dbc_hook_skipped", { reason: "FYM_APP secrets not set (hook dark)" });
+      return;
+    }
+    if (!record.ghl_contact_id) {
+      await log("dbc_hook_skipped", { reason: "no ghl_contact_id on pipeline record" });
+      return;
+    }
+
+    // NPN lives on agent_intake (linked by agent_id).
+    let npn: string | null = null;
+    if (record.agent_id) {
+      const { data: intake } = await supabase
+        .from("agent_intake")
+        .select("npn")
+        .eq("id", record.agent_id)
+        .maybeSingle();
+      npn = intake?.npn?.trim() || null;
+    }
+    if (!npn) {
+      await log("dbc_hook_skipped", { reason: "no NPN resolvable via agent_intake", agent_id: record.agent_id ?? null });
+      return;
+    }
+
+    const res = await fetch(`${appUrl.replace(/\/$/, "")}/functions/v1/dbc-lifecycle`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${appKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "stage_move",
+        agent_npn: npn,
+        agent_name: record.agent_name || `${record.first_name || ""} ${record.last_name || ""}`.trim(),
+        ghl_contact_id: record.ghl_contact_id,
+        stage: dbcStage,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    await log(res.ok ? "dbc_hook_ok" : "dbc_hook_error", {
+      status: res.status,
+      dbc_stage: dbcStage,
+      response: JSON.stringify(body).slice(0, 400),
+    });
+  } catch (err) {
+    await log("dbc_hook_error", { error: err instanceof Error ? err.message : String(err) }).catch(() => {});
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -82,6 +165,8 @@ Deno.serve(async (req: Request) => {
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      await fireDbcLifecycleHook(supabase, { ...record, ...updated }, new_stage);
 
       return new Response(
         JSON.stringify({ success: true, record: updated, ghl_pushed: false, reason: "no_config" }),
@@ -221,6 +306,9 @@ Deno.serve(async (req: Request) => {
       event_type: "push_success",
       payload: { record_id, new_stage, opportunity_id: opportunityId, matched_by_phone: matchedByPhone },
     });
+
+    // DBC lifecycle hook — non-blocking, after the stage move succeeded.
+    await fireDbcLifecycleHook(supabase, { ...record, ...updated }, new_stage);
 
     return new Response(
       JSON.stringify({ success: true, record: updated, ghl_pushed: true }),
