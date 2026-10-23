@@ -38,10 +38,14 @@ async function fireDbcLifecycleHook(
   record: any,
   newStage: string,
 ): Promise<void> {
+  // webhook_log columns are function_name/payload/outcome/error_message — the
+  // original source/event_type insert silently failed on every call (42703),
+  // leaving the hook with zero observability. Fixed 2026-10-23.
   const log = (eventType: string, payload: Record<string, unknown>) =>
     supabase.from("webhook_log").insert({
-      source: "push-pipeline-stage",
-      event_type: eventType,
+      function_name: "push-pipeline-stage",
+      outcome: eventType,
+      error_message: eventType.includes("error") ? String(payload.error ?? payload.response ?? "").slice(0, 500) : null,
       payload: { record_id: record.id, new_stage: newStage, ...payload },
     });
 
