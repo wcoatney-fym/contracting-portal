@@ -60,15 +60,29 @@ async function fireDbcLifecycleHook(
       return;
     }
 
-    // NPN lives on agent_intake (linked by agent_id).
+    // NPN resolution (fixed 2026-10-23): agent_pipeline.agent_id references
+    // agents.id — NOT agent_intake.id. Primary source is agents.npn; fallback
+    // is agent_intake.npn via agent_intake.agent_id (intake rows link to the
+    // same agents.id). The original lookup (agent_intake.id = agent_id) never
+    // matched a row, so every stage move skipped with "no NPN resolvable".
     let npn: string | null = null;
     if (record.agent_id) {
-      const { data: intake } = await supabase
-        .from("agent_intake")
+      const { data: agentRow } = await supabase
+        .from("agents")
         .select("npn")
         .eq("id", record.agent_id)
         .maybeSingle();
-      npn = intake?.npn?.trim() || null;
+      npn = agentRow?.npn?.trim() || null;
+      if (!npn) {
+        const { data: intake } = await supabase
+          .from("agent_intake")
+          .select("npn")
+          .eq("agent_id", record.agent_id)
+          .order("submitted_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        npn = intake?.npn?.trim() || null;
+      }
     }
     if (!npn) {
       await log("dbc_hook_skipped", { reason: "no NPN resolvable via agent_intake", agent_id: record.agent_id ?? null });
