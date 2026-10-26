@@ -25,6 +25,58 @@ const DBC_STAGE_KEYS: Record<string, string> = {
 };
 
 /**
+ * CRM-roster NPN fallback (Charlie, 2026-10-26). Looks up the latest FYM
+ * crm_roster upload and matches the pipeline card by email (preferred), then
+ * exact first+last name (case/space-insensitive). Deterministic only — no
+ * fuzzy matching; unmatched cards skip-and-log as before.
+ */
+async function resolveNpnFromCrmRoster(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  record: any,
+): Promise<string | null> {
+  const { data: upload } = await supabase
+    .from("crm_roster_uploads")
+    .select("id")
+    .eq("agency", "FYM")
+    .order("uploaded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!upload) return null;
+
+  const { data: rows } = await supabase
+    .from("crm_roster")
+    .select("row_data")
+    .eq("upload_id", upload.id);
+  if (!rows?.length) return null;
+
+  const norm = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const email = norm(record.email);
+  const name = norm(record.agent_name || `${record.first_name || ""} ${record.last_name || ""}`);
+
+  // deno-lint-ignore no-explicit-any
+  const npnOf = (r: any) => String(r.row_data?.["Agent NPN"] ?? "").trim() || null;
+  if (email) {
+    for (const r of rows) {
+      if (norm(r.row_data?.["Email"]) === email) {
+        const hit = npnOf(r);
+        if (hit) return hit;
+      }
+    }
+  }
+  if (name) {
+    for (const r of rows) {
+      if (norm(`${r.row_data?.["First Name"] ?? ""} ${r.row_data?.["Last Name"] ?? ""}`) === name) {
+        const hit = npnOf(r);
+        if (hit) return hit;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Fire-and-forget call to FYM-App dbc-lifecycle (action=stage_move) after a
  * successful stage move. NEVER fails the stage push — every outcome (ok, skip,
  * error) is logged to webhook_log as dbc_hook_*. Ships dark: with the
@@ -64,12 +116,15 @@ async function fireDbcLifecycleHook(
       return;
     }
 
-    // NPN resolution (fixed 2026-10-23): agent_pipeline.agent_id references
-    // agents.id — NOT agent_intake.id. Primary source is agents.npn; fallback
-    // is agent_intake.npn via agent_intake.agent_id (intake rows link to the
-    // same agents.id). The original lookup (agent_intake.id = agent_id) never
-    // matched a row, so every stage move skipped with "no NPN resolvable".
+    // NPN resolution (fixed 2026-10-23; roster fallback added 2026-10-26):
+    // agent_pipeline.agent_id references agents.id — NOT agent_intake.id.
+    // Order: agents.npn → agent_intake.npn (via agent_id) → agent_pipeline.npn
+    // (previously attributed) → CRM roster (latest FYM upload: email match,
+    // then exact first+last name). A roster hit is written back to
+    // agent_pipeline.npn so the card carries its own NPN from then on
+    // (Charlie, 2026-10-26).
     let npn: string | null = null;
+    let npnSource: string | null = null;
     if (record.agent_id) {
       const { data: agentRow } = await supabase
         .from("agents")
@@ -77,6 +132,7 @@ async function fireDbcLifecycleHook(
         .eq("id", record.agent_id)
         .maybeSingle();
       npn = agentRow?.npn?.trim() || null;
+      if (npn) npnSource = "agents";
       if (!npn) {
         const { data: intake } = await supabase
           .from("agent_intake")
@@ -86,10 +142,30 @@ async function fireDbcLifecycleHook(
           .limit(1)
           .maybeSingle();
         npn = intake?.npn?.trim() || null;
+        if (npn) npnSource = "agent_intake";
+      }
+    }
+    if (!npn && typeof record.npn === "string" && record.npn.trim()) {
+      npn = record.npn.trim();
+      npnSource = "pipeline_card";
+    }
+    if (!npn) {
+      npn = await resolveNpnFromCrmRoster(supabase, record);
+      if (npn) {
+        npnSource = "crm_roster";
+        // Attribute the NPN to the pipeline card (Charlie, 2026-10-26).
+        const { error: wbErr } = await supabase
+          .from("agent_pipeline")
+          .update({ npn })
+          .eq("id", record.id);
+        await log(wbErr ? "dbc_hook_npn_writeback_error" : "dbc_hook_npn_writeback", {
+          npn_source: "crm_roster",
+          ...(wbErr ? { error: wbErr.message } : {}),
+        });
       }
     }
     if (!npn) {
-      await log("dbc_hook_skipped", { reason: "no NPN resolvable via agent_intake", agent_id: record.agent_id ?? null });
+      await log("dbc_hook_skipped", { reason: "no NPN resolvable (agents, agent_intake, pipeline card, crm_roster)", agent_id: record.agent_id ?? null });
       return;
     }
 
@@ -108,6 +184,7 @@ async function fireDbcLifecycleHook(
     await log(res.ok ? "dbc_hook_ok" : "dbc_hook_error", {
       status: res.status,
       dbc_stage: dbcStage,
+      npn_source: npnSource,
       response: JSON.stringify(body).slice(0, 400),
     });
   } catch (err) {
