@@ -6,6 +6,7 @@ import { SSNInput } from '../../components/SSNInput';
 import { supabase, Agent, US_STATES, formatPhoneDisplay } from '../../lib/supabase';
 import { fireSubmissionWebhook } from '../../lib/webhooks';
 import { generateHubToken } from '../../lib/hubToken';
+import { insertWithRetry, handleIntakeSubmitError } from '../../lib/submitSafety';
 import { VerificationModal } from '../../components/VerificationModal';
 import { EditableAgentInfo } from '../../components/EditableAgentInfo';
 
@@ -66,9 +67,8 @@ export const Field: React.FC = () => {
     setLoading(true);
 
     try {
-      const { error: submissionError } = await supabase
-        .from('agent_intake')
-        .insert({
+      const { error: submissionError } = await insertWithRetry(() =>
+        supabase.from('agent_intake').insert({
           agent_id: agent.id,
           date_of_birth: formData.dateOfBirth,
           gender: formData.gender,
@@ -83,7 +83,8 @@ export const Field: React.FC = () => {
           ctm_acknowledgment: formData.ctmAcknowledgment,
           release_needed: formData.releaseNeeded,
           state_licenses: formData.stateLicenses,
-        });
+        }),
+      );
 
       if (submissionError) throw submissionError;
 
@@ -153,8 +154,7 @@ export const Field: React.FC = () => {
 
       navigate('/thank-you');
     } catch (error) {
-      alert('Error submitting form. Please try again.');
-      console.error(error);
+      await handleIntakeSubmitError({ form: 'field', agentId: agent.id, error });
     } finally {
       setLoading(false);
     }
