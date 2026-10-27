@@ -25,6 +25,159 @@ const DBC_STAGE_KEYS: Record<string, string> = {
 };
 
 /**
+ * CRM-roster NPN fallback (Charlie, 2026-10-26). Looks up the latest FYM
+ * crm_roster upload and matches the pipeline card by email (preferred), then
+ * exact first+last name (case/space-insensitive). Deterministic only — no
+ * fuzzy matching; unmatched cards skip-and-log as before.
+ *
+ * Attribution goes to the EXISTING field — agents.npn — never a parallel one
+ * (Charlie, 2026-10-26: "attribute the information to the existing NPN field").
+ * If the pipeline card isn't linked to an agents row yet, we link it
+ * (agent_pipeline.agent_id) when a deterministic email/name match exists.
+ */
+async function resolveNpnFromCrmRoster(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  record: any,
+): Promise<string | null> {
+  const { data: upload } = await supabase
+    .from("crm_roster_uploads")
+    .select("id")
+    .eq("agency", "FYM")
+    .order("uploaded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!upload) return null;
+
+  const { data: rows } = await supabase
+    .from("crm_roster")
+    .select("row_data")
+    .eq("upload_id", upload.id);
+  if (!rows?.length) return null;
+
+  const norm = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const email = norm(record.email);
+  const name = norm(record.agent_name || `${record.first_name || ""} ${record.last_name || ""}`);
+
+  // deno-lint-ignore no-explicit-any
+  const npnOf = (r: any) => String(r.row_data?.["Agent NPN"] ?? "").trim() || null;
+  if (email) {
+    for (const r of rows) {
+      if (norm(r.row_data?.["Email"]) === email) {
+        const hit = npnOf(r);
+        if (hit) return hit;
+      }
+    }
+  }
+  if (name) {
+    for (const r of rows) {
+      if (norm(`${r.row_data?.["First Name"] ?? ""} ${r.row_data?.["Last Name"] ?? ""}`) === name) {
+        const hit = npnOf(r);
+        if (hit) return hit;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Attribute a roster-resolved NPN to the existing agents.npn field.
+ * - Card already linked (agent_id set): fill agents.npn only when blank.
+ * - Card unlinked: find the agents row deterministically (email, then exact
+ *   first+last name), link agent_pipeline.agent_id to it, fill npn when blank.
+ * - No agents row at all: nothing to attribute — the NPN is still used for
+ *   this card generation, and the gap is logged for a manual/data-repair pass.
+ * Never overwrites a non-blank agents.npn.
+ */
+async function attributeNpnToAgentsRow(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  record: any,
+  npn: string,
+  log: (eventType: string, payload: Record<string, unknown>) => unknown,
+): Promise<void> {
+  try {
+    let agentId: string | null = record.agent_id ?? null;
+    let linked = false;
+
+    if (!agentId) {
+      const email = String(record.email ?? "").trim();
+      if (email) {
+        const { data: byEmail } = await supabase
+          .from("agents")
+          .select("id")
+          .ilike("email", email)
+          .limit(1)
+          .maybeSingle();
+        agentId = byEmail?.id ?? null;
+      }
+      if (!agentId) {
+        const name = String(record.agent_name ?? `${record.first_name || ""} ${record.last_name || ""}`)
+          .trim().replace(/\s+/g, " ");
+        if (name) {
+          const [first, ...rest] = name.split(" ");
+          if (first && rest.length) {
+            const { data: byName } = await supabase
+              .from("agents")
+              .select("id")
+              .ilike("first_name", first)
+              .ilike("last_name", rest.join(" "))
+              .limit(1)
+              .maybeSingle();
+            agentId = byName?.id ?? null;
+          }
+        }
+      }
+      if (agentId) {
+        const { error: linkErr } = await supabase
+          .from("agent_pipeline")
+          .update({ agent_id: agentId })
+          .eq("id", record.id);
+        if (linkErr) {
+          await log("dbc_hook_npn_attribution_error", { step: "link_agent_id", error: linkErr.message });
+          return;
+        }
+        linked = true;
+      }
+    }
+
+    if (!agentId) {
+      await log("dbc_hook_npn_unattributed", {
+        reason: "no agents row matches this pipeline card (email/name)",
+        npn_source: "crm_roster",
+      });
+      return;
+    }
+
+    // Fill the existing field only when blank — never overwrite.
+    const { data: existing } = await supabase
+      .from("agents")
+      .select("npn")
+      .eq("id", agentId)
+      .maybeSingle();
+    if (existing && !(existing.npn ?? "").trim()) {
+      const { error: npnErr } = await supabase
+        .from("agents")
+        .update({ npn })
+        .eq("id", agentId);
+      await log(npnErr ? "dbc_hook_npn_attribution_error" : "dbc_hook_npn_attributed", {
+        agent_id: agentId,
+        linked_agent_id: linked,
+        ...(npnErr ? { step: "set_agents_npn", error: npnErr.message } : { npn_source: "crm_roster" }),
+      });
+    } else if (linked) {
+      await log("dbc_hook_npn_attributed", { agent_id: agentId, linked_agent_id: true, npn_source: "crm_roster", note: "agents.npn already set; card linked only" });
+    }
+  } catch (err) {
+    try {
+      await log("dbc_hook_npn_attribution_error", { error: err instanceof Error ? err.message : String(err) });
+    } catch { /* attribution logging must never break the hook */ }
+  }
+}
+
+/**
  * Fire-and-forget call to FYM-App dbc-lifecycle (action=stage_move) after a
  * successful stage move. NEVER fails the stage push — every outcome (ok, skip,
  * error) is logged to webhook_log as dbc_hook_*. Ships dark: with the
@@ -64,12 +217,15 @@ async function fireDbcLifecycleHook(
       return;
     }
 
-    // NPN resolution (fixed 2026-10-23): agent_pipeline.agent_id references
-    // agents.id — NOT agent_intake.id. Primary source is agents.npn; fallback
-    // is agent_intake.npn via agent_intake.agent_id (intake rows link to the
-    // same agents.id). The original lookup (agent_intake.id = agent_id) never
-    // matched a row, so every stage move skipped with "no NPN resolvable".
+    // NPN resolution (fixed 2026-10-23; roster fallback added 2026-10-26):
+    // agent_pipeline.agent_id references agents.id — NOT agent_intake.id.
+    // Order: agents.npn → agent_intake.npn (via agent_id) → CRM roster (latest
+    // FYM upload: email match, then exact first+last name). A roster hit is
+    // attributed to the EXISTING agents.npn field (filled only when blank);
+    // unlinked cards get agent_pipeline.agent_id linked to a deterministic
+    // agents-row match first. No parallel NPN field (Charlie, 2026-10-26).
     let npn: string | null = null;
+    let npnSource: string | null = null;
     if (record.agent_id) {
       const { data: agentRow } = await supabase
         .from("agents")
@@ -77,6 +233,7 @@ async function fireDbcLifecycleHook(
         .eq("id", record.agent_id)
         .maybeSingle();
       npn = agentRow?.npn?.trim() || null;
+      if (npn) npnSource = "agents";
       if (!npn) {
         const { data: intake } = await supabase
           .from("agent_intake")
@@ -86,10 +243,18 @@ async function fireDbcLifecycleHook(
           .limit(1)
           .maybeSingle();
         npn = intake?.npn?.trim() || null;
+        if (npn) npnSource = "agent_intake";
       }
     }
     if (!npn) {
-      await log("dbc_hook_skipped", { reason: "no NPN resolvable via agent_intake", agent_id: record.agent_id ?? null });
+      npn = await resolveNpnFromCrmRoster(supabase, record);
+      if (npn) {
+        npnSource = "crm_roster";
+        await attributeNpnToAgentsRow(supabase, record, npn, log);
+      }
+    }
+    if (!npn) {
+      await log("dbc_hook_skipped", { reason: "no NPN resolvable (agents, agent_intake, crm_roster)", agent_id: record.agent_id ?? null });
       return;
     }
 
@@ -108,6 +273,7 @@ async function fireDbcLifecycleHook(
     await log(res.ok ? "dbc_hook_ok" : "dbc_hook_error", {
       status: res.status,
       dbc_stage: dbcStage,
+      npn_source: npnSource,
       response: JSON.stringify(body).slice(0, 400),
     });
   } catch (err) {
