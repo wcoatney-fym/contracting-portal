@@ -251,6 +251,59 @@ async function fetchAllOpportunities(
   return all;
 }
 
+interface GhlUser {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  email?: string;
+  deleted?: boolean;
+}
+
+/**
+ * Fetch the location's GHL users and upsert into agency_ghl_users.
+ * Maps agency_clients.ghl_assigned_to (a GHL user id) to a person — needed for
+ * per-broker client tracking in CRM Ops (Charlie, 2026-10-29). Best-effort:
+ * a failure here never fails the sync, it just leaves the map stale.
+ */
+async function syncLocationUsers(
+  supabase: ReturnType<typeof createClient>,
+  agencyId: string,
+  locationId: string,
+  headers: GhlHeaders,
+): Promise<number> {
+  const res = await fetchWithRetry(
+    `${GHL_BASE}/users/?locationId=${locationId}`,
+    headers,
+  );
+  if (!res) return 0;
+  const data = await res.json();
+  const users: GhlUser[] = data.users || [];
+  if (users.length === 0) return 0;
+
+  const now = new Date().toISOString();
+  const rows = users.map((u) => ({
+    agency_id: agencyId,
+    ghl_user_id: u.id,
+    first_name: u.firstName || "",
+    last_name: u.lastName || "",
+    name: u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+    email: (u.email || "").toLowerCase(),
+    deleted: Boolean(u.deleted),
+    updated_at: now,
+  }));
+
+  let upserted = 0;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase
+      .from("agency_ghl_users")
+      .upsert(batch, { onConflict: "agency_id,ghl_user_id" });
+    if (!error) upserted += batch.length;
+  }
+  return upserted;
+}
+
 function computeKpisFromOpportunities(opps: Opportunity[]) {
   let crossSellOpportunities = 0;
   let savedPolicies = 0;
@@ -526,6 +579,19 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Sync complete: compute KPIs and sync deals ---
+    // Location users map (best-effort — see syncLocationUsers).
+    let ghlUsersSynced = 0;
+    try {
+      ghlUsersSynced = await syncLocationUsers(
+        supabase,
+        agency_id,
+        config.ghl_location_id,
+        ghlHeaders,
+      );
+    } catch (_err) {
+      // Non-fatal: user map stays stale, sync proceeds.
+    }
+
     const opportunities = await fetchAllOpportunities(
       config.ghl_location_id,
       ghlHeaders,
@@ -638,6 +704,7 @@ Deno.serve(async (req: Request) => {
         client_status_field_found: Boolean(clientStatusFieldId),
         total_contacts_fetched: totalFetched,
         total_contacts_synced: clientsSynced,
+        ghl_users_synced: ghlUsersSynced,
         total_expected: totalExpected,
         chunks_processed: chunkCount,
         opportunities_synced: dealRows.length,
