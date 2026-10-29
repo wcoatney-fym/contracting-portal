@@ -9,7 +9,9 @@
 -- (authenticated). No PII beyond name/email of CRM staff/agents.
 
 CREATE TABLE IF NOT EXISTS agency_ghl_users (
-  agency_id uuid NOT NULL REFERENCES hierarchy_agencies(id) ON DELETE CASCADE,
+  -- No FK: hierarchy_agencies is a barrier VIEW (base table _hierarchy_agencies, renamed 2026-09-03);
+  -- a view can't be an FK target and coupling to the hidden base table isn't worth it here.
+  agency_id uuid NOT NULL,
   ghl_user_id text NOT NULL,
   first_name text NOT NULL DEFAULT '',
   last_name text NOT NULL DEFAULT '',
