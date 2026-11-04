@@ -41,9 +41,14 @@ export const AgentHub: React.FC = () => {
   useEffect(() => { if (token) loadHub(); else { setNotFound(true); setLoading(false); } }, [token]);
 
   const loadHub = async () => {
-    const { data: tokenRow } = await supabase
-      .from('agent_hub_tokens').select('agent_id, agent_slug, token')
-      .eq('token', token!).eq('is_active', true).maybeSingle();
+    // hub_login(p_token): exact-match SECURITY DEFINER token exchange. Replaces
+    // the open anon SELECT on agent_hub_tokens (which exposed every active
+    // token). The RPC ships in tranche-1 SQL and must be applied before this
+    // deploys — see the PR body's deploy order.
+    const { data: tokenRows } = await supabase.rpc('hub_login', { p_token: token! });
+    const tokenRow = (Array.isArray(tokenRows) ? tokenRows[0] : tokenRows) as
+      | { agent_id: string; token: string; npn: string | null; agent_slug: string }
+      | undefined;
     if (!tokenRow) { setNotFound(true); setLoading(false); return; }
 
     const [

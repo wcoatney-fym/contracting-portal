@@ -193,16 +193,16 @@ export const RosterImport: React.FC = () => {
           continue;
         }
 
-        // Auto-generate hub token
-        const agentSlug = [firstName, lastName, npn]
-          .map(s => s.toLowerCase().replace(/[^a-z0-9]/g, ''))
-          .filter(Boolean)
-          .join('-');
-
-        await supabase.from('agent_hub_tokens').insert({
-          agent_id: newAgent.id,
-          npn,
-          agent_slug: agentSlug || null,
+        // Auto-generate hub token server-side (staff-tools, service role) —
+        // direct INSERT grants on agent_hub_tokens are revoked in tranche 1.
+        await supabase.functions.invoke('staff-tools', {
+          body: {
+            action: 'mint_hub_token',
+            agent_id: newAgent.id,
+            npn,
+            first_name: firstName,
+            last_name: lastName,
+          },
         });
 
         imported++;

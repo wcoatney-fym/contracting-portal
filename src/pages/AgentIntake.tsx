@@ -169,7 +169,8 @@ export const AgentIntake: React.FC = () => {
     });
   };
 
-  const generateSecurityCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+  // Security codes are generated server-side by the staff-tools edge fn
+  // (tranche-1: anon writes to agent_security_codes are revoked).
 
   const generateFormUrl = (formType: string, agentId: string) => {
     const configuredUrl = import.meta.env.VITE_APP_URL;
@@ -237,7 +238,6 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
     setLoading(true);
 
     try {
-      const securityCode = generateSecurityCode();
       const expirationDate = new Date();
       expirationDate.setHours(expirationDate.getHours() + 72);
 
@@ -270,11 +270,13 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
 
       if (error) throw error;
 
-      // Write security code to barrier table (anon-unreadable)
-      await supabase.from('agent_security_codes').insert({
-        agent_id: agent.id,
-        security_code: securityCode,
+      // Server-side code generation + write to the barrier table (staff-tools,
+      // service role). Requires the staff session JWT — anon writes are revoked.
+      const { data: codeData, error: codeError } = await supabase.functions.invoke('staff-tools', {
+        body: { action: 'set_security_code', agent_id: agent.id },
       });
+      const securityCode: string | undefined = (codeData as { code?: string } | null)?.code;
+      if (codeError || !securityCode) throw new Error('Could not set the security code');
 
       const formUrl = generateFormUrl(formData.formType, agent.id);
 

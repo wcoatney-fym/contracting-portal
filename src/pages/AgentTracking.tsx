@@ -103,7 +103,6 @@ export const AgentTracking: React.FC = () => {
   const handleResend = async (agent: Agent) => {
     if (!confirm('Resend link and generate new security code?')) return;
 
-    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
     const newExpiration = new Date();
     newExpiration.setHours(newExpiration.getHours() + 72);
 
@@ -116,10 +115,16 @@ export const AgentTracking: React.FC = () => {
       })
       .eq('id', agent.id);
 
-    // Update barrier table with new code
-    await supabase.from('agent_security_codes').update({
-      security_code: newCode,
-    }).eq('agent_id', agent.id);
+    // New code is generated server-side (staff-tools, service role) — anon
+    // writes to the barrier table are revoked in tranche 1.
+    const { data: codeData, error: codeError } = await supabase.functions.invoke('staff-tools', {
+      body: { action: 'set_security_code', agent_id: agent.id },
+    });
+    const newCode: string | undefined = (codeData as { code?: string } | null)?.code;
+    if (codeError || !newCode) {
+      alert('Could not generate a new security code. Please try again.');
+      return;
+    }
 
     await supabase.from('activity_log').insert({
       agent_id: agent.id,

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
 import { Shield, LogIn, AlertCircle, Loader2 } from 'lucide-react';
 
 export const HubLogin: React.FC = () => {
@@ -29,84 +28,33 @@ export const HubLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      // Step 1: Find agent by first_name + last_name + npn
-      // Check agents table first (canonical NPN after migration)
-      const { data: agent } = await supabase
-        .from('agents')
-        .select('id, first_name, last_name, npn')
-        .ilike('first_name', firstName.trim())
-        .ilike('last_name', lastName.trim())
-        .eq('npn', npn.trim())
-        .maybeSingle();
+      // Server-side exchange (hub-login edge fn): finds the agent by name +
+      // NPN and finds-or-creates their hub token with the service role. The
+      // old anon-key lookups required open SELECT/INSERT on agent_hub_tokens
+      // (any visitor could enumerate or mint tokens) — revoked in tranche 1.
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hub-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          npn: npn.trim(),
+        }),
+      });
 
-      let agentId = agent?.id;
-
-      // Fallback: check agent_intake if no match on agents.npn (pre-backfill agents)
-      if (!agentId) {
-        const { data: intake } = await supabase
-          .from('agent_intake')
-          .select('agent_id, npn')
-          .eq('npn', npn.trim())
-          .maybeSingle();
-
-        if (intake?.agent_id) {
-          // Verify name matches via agents table
-          const { data: agentCheck } = await supabase
-            .from('agents')
-            .select('id')
-            .eq('id', intake.agent_id)
-            .ilike('first_name', firstName.trim())
-            .ilike('last_name', lastName.trim())
-            .maybeSingle();
-
-          if (agentCheck) {
-            agentId = agentCheck.id;
-          }
-        }
-      }
-
-      if (!agentId) {
+      if (res.status === 404) {
         setAttempts(prev => prev + 1);
         setError('We couldn\'t find your account. Please check your name and NPN, or contact Contracting@teamfym.com for help.');
         setLoading(false);
         return;
       }
 
-      // Step 2: Find or create hub token for this agent
-      const { data: existingToken } = await supabase
-        .from('agent_hub_tokens')
-        .select('token')
-        .eq('agent_id', agentId)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (existingToken?.token) {
-        // Log the login
-        supabase.from('agent_hub_logins').insert({ agent_id: agentId, login_method: 'npn' }).then(() => {});
-        navigate(`/hub/${existingToken.token}`);
-        return;
-      }
-
-      // No token exists — create one
-      const agentSlug = [firstName, lastName, npn]
-        .map(s => s.trim().toLowerCase().replace(/[^a-z0-9]/g, ''))
-        .filter(Boolean)
-        .join('-');
-
-      const { data: newToken } = await supabase
-        .from('agent_hub_tokens')
-        .insert({
-          agent_id: agentId,
-          npn: npn.trim(),
-          agent_slug: agentSlug || null,
-        })
-        .select('token')
-        .maybeSingle();
-
-      if (newToken?.token) {
-        // Log the login (first-time token creation)
-        supabase.from('agent_hub_logins').insert({ agent_id: agentId, login_method: 'npn' }).then(() => {});
-        navigate(`/hub/${newToken.token}`);
+      const result = await res.json().catch(() => ({}));
+      if (res.ok && result.token) {
+        navigate(`/hub/${result.token}`);
       } else {
         setError('Something went wrong. Please try again or contact Contracting@teamfym.com.');
       }

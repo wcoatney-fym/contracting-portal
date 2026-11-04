@@ -147,6 +147,7 @@ export const Telesales: React.FC = () => {
       // Generate agent hub token — ONLY after successful intake form completion
       await generateHubToken({
         agentId: agent.id,
+        securityCode: agent.security_code,
         npn: formData.npn || null,
         firstName: agent.first_name,
         lastName: agent.last_name,
