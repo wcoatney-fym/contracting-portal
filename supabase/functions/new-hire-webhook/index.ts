@@ -184,7 +184,8 @@ Deno.serve(async (req: Request) => {
       outcome: "received",
     });
 
-    const baseUrl = (appUrl || "https://contracting.teamfym.com").replace(/\/+$/, '');
+    // CP site retirement (2026-11-04): form pages live on the FYM App now.
+    const baseUrl = (appUrl || "https://agency.teamfym.com").replace(/\/+$/, '');
 
     const directAutoSend = !!(formType && FORM_ROUTE_MAP[formType]);
 

@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
       </tr>
     </table>
     <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e0e0e0; font-size: 13px; color: #888;">
-      Review in the <a href="https://contracting.teamfym.com" style="color: #1a1a2e;">FYM Contracting Portal</a>
+      Review in the <a href="https://agency.teamfym.com" style="color: #1a1a2e;">FYM App</a>
     </div>
   </div>
 </div>`;
@@ -136,7 +136,7 @@ ${contracting_contact ? `Contact: ${contracting_contact}\n` : ""}NPN: ${agency_n
 ${agency_ein ? `EIN: ${agency_ein}\n` : ""}Location: ${locationLine}
 Submitted: ${submittedAt} ET
 
-Review at https://contracting.teamfym.com`;
+Review at https://agency.teamfym.com`;
 
     const resendPayload = {
       from: "FYM Contracting <activation@send.teamfym.com>",
