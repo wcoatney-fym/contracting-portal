@@ -55,16 +55,8 @@ export const AddAgencyModal: React.FC<AddAgencyModalProps> = ({ onClose, onSucce
       return;
     }
 
-    // Ensure auth session is active before writing
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      const serviceEmail = import.meta.env.VITE_SERVICE_EMAIL;
-      const servicePassword = import.meta.env.VITE_SERVICE_PASSWORD;
-      if (serviceEmail && servicePassword) {
-        await supabase.auth.signInWithPassword({ email: serviceEmail, password: servicePassword });
-      }
-    }
-
+    // Session is per-person via staff-login (AuthContext) — the old
+    // VITE_SERVICE_* re-auth fallback is gone (containment PR, 2026-11-04).
     const { data: newAgency, error: insertError } = await supabase
       .from('hierarchy_agencies')
       .insert({
