@@ -53,7 +53,8 @@ REVOKE ALL ON public.staff_allowlist FROM authenticated;
 -- over-provisioning is an access grant — so this list stays explicit.
 INSERT INTO public.staff_allowlist (email, note) VALUES
   ('rmitchell@teamfym.com', 'seed: confirmed by Charlie 2026-11-04'),
-  ('will@teamfym.com', 'seed: confirmed by Charlie 2026-11-04')
+  ('will@teamfym.com', 'seed: confirmed by Charlie 2026-11-04'),
+  ('bbill@teamfym.com', 'seed: Bianca Bill, active contracting operator — confirmed by Charlie 2026-11-04; email verified against FYM App profiles.full_name')
 ON CONFLICT (email) DO NOTHING;
 
 -- 2. Failed-attempt tracking for rate limiting -------------------------------
