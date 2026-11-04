@@ -1,6 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+/**
+ * Portal staff auth — containment PR (2026-11-04).
+ *
+ * The old flow validated the shared portal password (validate-portal-login)
+ * and then signed EVERYONE in as the shared service account using
+ * VITE_SERVICE_EMAIL / VITE_SERVICE_PASSWORD baked into the bundle. That path
+ * is deleted: the staff-login edge function now validates the same portal
+ * password server-side and mints a PER-PERSON session (app_metadata.kind =
+ * 'staff') for the email the staff member entered. No service credentials
+ * exist client-side, so service@teamfym.com's password can be rotated without
+ * touching this app (FYM-App edge fns keep using PORTAL_SERVICE_* secrets).
+ */
+
 interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
@@ -10,110 +23,64 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Agency portal sessions (kind 'agency') must never pass the staff gate. */
+const isStaffSession = (kind: unknown): boolean => kind !== 'agency';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const authenticateWithSupabase = async (): Promise<boolean> => {
-    try {
-      const serviceEmail = import.meta.env.VITE_SERVICE_EMAIL;
-      const servicePassword = import.meta.env.VITE_SERVICE_PASSWORD;
-
-      if (!serviceEmail || !servicePassword) {
-        console.error('Service credentials not configured');
-        return false;
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: serviceEmail,
-        password: servicePassword,
-      });
-
-      if (error) {
-        console.error('Supabase auth error:', error.message);
-        return false;
-      }
-
-      if (data.session) {
-        console.log('Supabase session established');
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Error authenticating with Supabase:', error);
-      return false;
-    }
-  };
-
   useEffect(() => {
     const initAuth = async () => {
       setIsLoading(true);
-      const authStatus = sessionStorage.getItem('fym_portal_auth');
-
-      if (authStatus === 'true') {
-        const { data } = await supabase.auth.getSession();
-
-        if (data.session) {
-          setIsAuthenticated(true);
-        } else {
-          const success = await authenticateWithSupabase();
-          setIsAuthenticated(success);
-          if (!success) {
-            sessionStorage.removeItem('fym_portal_auth');
-          }
-        }
-      }
-
+      const { data } = await supabase.auth.getSession();
+      setIsAuthenticated(
+        !!data.session && isStaffSession(data.session.user.app_metadata?.kind),
+      );
       setIsLoading(false);
     };
 
     initAuth();
   }, []);
 
-  const validateCredentials = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
     try {
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-portal-login`;
-      const response = await fetch(apiUrl, {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ email, password }),
       });
-      const result = await response.json();
-      return result.valid === true;
-    } catch {
-      return false;
-    }
-  };
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result.access_token || !result.refresh_token) {
+        return false;
+      }
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
+      const { data, error } = await supabase.auth.setSession({
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+      });
+      if (error || !data.session) {
+        console.error('Could not establish the portal session:', error?.message);
+        return false;
+      }
 
-    const credentialsValid = await validateCredentials(email, password);
-    if (!credentialsValid) {
-      setIsLoading(false);
-      return false;
-    }
-
-    const supabaseAuthSuccess = await authenticateWithSupabase();
-
-    if (supabaseAuthSuccess) {
       setIsAuthenticated(true);
-      sessionStorage.setItem('fym_portal_auth', 'true');
-      setIsLoading(false);
       return true;
+    } catch (error) {
+      console.error('Error signing in:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
-    return false;
   };
 
   const logout = async () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('fym_portal_auth');
+    sessionStorage.removeItem('fym_portal_auth'); // legacy flag cleanup
     await supabase.auth.signOut();
   };
 
