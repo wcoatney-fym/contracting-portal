@@ -64,8 +64,14 @@ Deno.serve(async (req: Request) => {
     );
     const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) return json({ error: "Invalid or expired session" }, 401);
-    // Staff only — agency portal sessions (kind 'agency') don't manage intake codes.
-    if (user.app_metadata?.kind === "agency") return json({ error: "Forbidden" }, 403);
+    // Staff only — POSITIVE check (Charlie review, 2026-11-04): require
+    // kind === 'staff' explicitly. The previous deny-list (reject only
+    // kind === 'agency') would have let any other authenticated akhojh user —
+    // e.g. an account with no kind at all — set security codes or mint hub
+    // tokens for any agent. akhojh has disable_signup=true (verified
+    // 2026-11-04), so no-kind self-signups can't currently be created, but
+    // the gate must not depend on that setting staying true.
+    if (user.app_metadata?.kind !== "staff") return json({ error: "Forbidden" }, 403);
 
     const body = await req.json().catch(() => ({}));
     const action = clean(body.action, 40);
