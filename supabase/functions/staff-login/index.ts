@@ -63,6 +63,10 @@ const LOCKOUT_WINDOW_MINUTES = 15;
 
 function clientIp(req: Request): string | null {
   // Standard proxy header chain; take the first (client) hop.
+  // TICKET (Charlie review, 2026-11-04, non-blocking): the first x-forwarded-for
+  // hop is caller-controlled, so the per-IP lockout is spoofable — the per-email
+  // lockout is the real protection. Switch to the gateway-appended hop (last
+  // trusted entry) in a follow-up.
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0].trim();
   return req.headers.get("x-real-ip");

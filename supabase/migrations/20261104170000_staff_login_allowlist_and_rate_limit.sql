@@ -79,3 +79,31 @@ REVOKE ALL ON public.staff_login_attempts FROM authenticated;
 -- (15 min) has long since expired. Pruned opportunistically by the function
 -- (best-effort DELETE on each invocation) rather than a separate cron, to
 -- avoid adding a new scheduled job for a low-volume table.
+
+-- 3. Staff-session read/write policies for pages staff use today ---------------
+-- (Charlie review round 2, 2026-11-04.) Once staff hold real authenticated
+-- sessions instead of riding anon, three tables staff pages touch only had
+-- anon policies and would go blank / fail:
+--   agent_hub_logins       SELECT  (BiancaHub recent-logins panel)
+--   agent_live_attendance  SELECT  (BiancaHub attendance panel)
+--   webhook_log            INSERT  (submitSafety client-error logging)
+-- Add matching policies for authenticated callers gated on portal_is_staff()
+-- (= portal_kind() = 'staff', reads app_metadata.kind from the JWT; both
+-- functions already live in akhojh). webhook_log keeps the exact same check
+-- as the anon insert policy (client:% error rows only).
+
+CREATE POLICY staff_select_agent_hub_logins ON public.agent_hub_logins
+  FOR SELECT TO authenticated
+  USING (public.portal_is_staff());
+
+CREATE POLICY staff_select_agent_live_attendance ON public.agent_live_attendance
+  FOR SELECT TO authenticated
+  USING (public.portal_is_staff());
+
+CREATE POLICY staff_insert_client_errors ON public.webhook_log
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.portal_is_staff()
+    AND function_name LIKE 'client:%'
+    AND outcome = 'error'
+  );
