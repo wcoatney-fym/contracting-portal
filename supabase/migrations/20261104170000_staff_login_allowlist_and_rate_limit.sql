@@ -44,14 +44,16 @@ REVOKE ALL ON public.staff_allowlist FROM authenticated;
 -- the only caller (staff-login function, manual dashboard edits by Charlie).
 
 -- Seed: carry forward the known staff users already created under the old
--- any-email-on-domain behavior, so this migration doesn't lock out people
--- who are already legitimately using staff-login today. Confirm/prune this
--- list with Charlie before merging T1a/T1b (per the tranche-1 runbook) —
--- flagged as a TODO comment rather than guessed at silently.
--- TODO(Charlie): confirm this seed list is complete / remove any stale rows.
+-- Final seed confirmed by Charlie 2026-11-04 (#dev-fym-app). Evidence check
+-- before committing: akhojh auth.users has ZERO human kind='staff' accounts
+-- (only service@ + crm-automation@, both machine accounts) — the old
+-- auto-create path was never used by a real person, so nobody is silently
+-- locked out by starting narrow. Adding a staffer later is one INSERT into
+-- staff_allowlist (no deploy needed); under-provisioning is cheap,
+-- over-provisioning is an access grant — so this list stays explicit.
 INSERT INTO public.staff_allowlist (email, note) VALUES
-  ('charlie@teamfym.com', 'seed: known staff user pre-allowlist'),
-  ('will@teamfym.com', 'seed: known staff user pre-allowlist')
+  ('rmitchell@teamfym.com', 'seed: confirmed by Charlie 2026-11-04'),
+  ('will@teamfym.com', 'seed: confirmed by Charlie 2026-11-04')
 ON CONFLICT (email) DO NOTHING;
 
 -- 2. Failed-attempt tracking for rate limiting -------------------------------
