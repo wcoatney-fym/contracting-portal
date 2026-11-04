@@ -7,6 +7,22 @@
 
 ---
 
+## ⓪ Pre-① fixes — #902 gaps live in production (DONE 2026-11-04, Charlie-approved)
+
+Two gaps shipped with FYM-App #902 and were fixed before step ①, independent of the rest of this runbook:
+
+**A. rcbzag `contracting-form` redeploy (was v3, pre-#902).** #902 moved FYM-App intake-form hub-token minting to `contracting-form` action `mint_hub_token`, but the fn was never redeployed — v3 returned "Unknown action", so `mintHubToken` returned null and newly completed forms got no hub link. No completions landed in the gap window.
+- Action: deployed `contracting-form` from FYM-App main → **v4**, `--no-verify-jwt` (read back from the functions API).
+- Smoke: `mint_hub_token` with Tester Mitchell's form id + security code → 200, token minted, slug `tester-mitchell-99999999`.
+- Rollback: redeploy prior version from the pre-#902 commit (v3 behavior) — only if the mint path itself misbehaves.
+
+**B. `agent_step_completions` had NO UPDATE/DELETE policy for any role.** FYM-App AgentStepReviewPanel approve/decline (`portalSupabase.update(...)`) silently changed 0 rows, and TestViewLaunchModal's reset delete failed the same way — staff could not review agent "mark done" submissions.
+- Action (applied to akhojh, additive): `staff_update_step_completions` FOR UPDATE TO authenticated USING/WITH CHECK `portal_is_staff()`; `staff_delete_step_completions` FOR DELETE TO authenticated USING `portal_is_staff()`. Read back from `pg_policy`.
+- Smoke (data-level, Tester Mitchell scratch record): negative control first — UPDATE under `authenticated` + `kind='agency'` JWT claims → 0 rows; then under `kind='staff'` claims: approve → `status='approved'`, decline → `status='declined'` + note, DELETE → both rows removed (the delete doubles as the TestViewLaunchModal-path test and the cleanup). Pipeline restored to dnf, tags intact, 0 `ghl_push_queue` rows for the test pipeline.
+- Rollback: `DROP POLICY` the two policies (additive; nothing else depends on them).
+
+---
+
 ## ① Merge + deploy CP #112 (staff-login containment + hardening)
 
 **Blocked on:** Charlie's final staff allowlist (migration seed is currently `charlie@` + `will@` only — anyone not listed loses staff-page access the moment this deploys).
@@ -94,6 +110,7 @@
 
 **Smoke**
 - Re-run the entire ④ suite on the live site (hub sign-in, intake e2e, AgentIntake, AgentTracking, RosterImport).
+- As a staff session in FYM-App: Contracting › Intake still shows security codes (ContractingIntakeTab reads `agent_security_codes`), and the Pipeline step review panel still loads + can approve/decline (T1b touches security codes and step completions — these are the two FYM-App surfaces riding those grants).
 - Verify anon is actually shut: an anon-key select on `agent_hub_tokens` (and the other revoked tables) now returns a permission error.
 - Watch CP console + `webhook_log` for an error spike for ~30 minutes.
 
