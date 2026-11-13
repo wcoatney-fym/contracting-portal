@@ -123,6 +123,7 @@ export const LifeOnly: React.FC = () => {
         email: agent.email,
         phone: agent.phone,
         securityCode: agent.security_code,
+        portalAgentId: agent.id,
         dob: formData.dateOfBirth,
         gender: formData.gender,
         address: formData.address,
