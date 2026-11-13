@@ -27,7 +27,11 @@ Deno.serve(async (req: Request) => {
         first_name: data.firstName,
         last_name: data.lastName,
         email: data.email,
-        phone: data.phone
+        phone: data.phone,
+        // Portal agents.id — Zapier maps this onto the GHL contact custom
+        // field contact.fym_portal_agent_id (same mapping as the submission
+        // webhook) so the card webhook links exactly (Charlie, 2026-11-13).
+        portal_agent_id: data.portalAgentId || null
       },
       form: {
         type: data.formType,
