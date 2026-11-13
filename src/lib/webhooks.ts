@@ -21,6 +21,10 @@ interface PopulateWebhookData {
 }
 
 interface SubmissionWebhookData {
+  /** Portal agents.id — carried through Zapier onto the GHL contact custom
+   *  field contact.fym_portal_agent_id so the card webhook can link the
+   *  pipeline card exactly (Charlie, 2026-11-13). */
+  portalAgentId: string;
   formType: string;
   agentType?: string;
   agency: string;
