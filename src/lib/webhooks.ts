@@ -9,6 +9,11 @@ const CRM_ONBOARDING_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/crm-onboarding-
 const CROSS_SELL_CONFIRM_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/cross-sell-confirm-webhook`;
 
 interface PopulateWebhookData {
+  /** Portal agents.id — same exact-link field as SubmissionWebhookData. The
+   *  AgentIntake generator creates the agents row before firing this webhook,
+   *  so the id exists and stamps the GHL contact at populate time — covering
+   *  cards created before the agent completes the public intake form. */
+  portalAgentId: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -57,6 +62,7 @@ export const firePopulateWebhook = async (data: PopulateWebhookData): Promise<vo
       'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify({
+      portalAgentId: data.portalAgentId,
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,

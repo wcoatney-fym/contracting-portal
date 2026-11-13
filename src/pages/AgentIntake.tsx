@@ -61,6 +61,7 @@ export const AgentIntake: React.FC = () => {
   });
 
   const [generated, setGenerated] = useState<{
+    agentId: string;
     url: string;
     code: string;
     emailBody: string;
@@ -298,6 +299,7 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
       );
 
       setGenerated({
+        agentId: agent.id,
         url: formUrl,
         code: securityCode,
         emailBody,
@@ -338,6 +340,7 @@ ${agencyNames[agency] || agencyNames['FYM']}`;
 
     try {
       await firePopulateWebhook({
+        portalAgentId: generated.agentId,
         firstName: generated.firstName,
         lastName: generated.lastName,
         email: generated.email,
